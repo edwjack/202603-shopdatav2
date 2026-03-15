@@ -8,9 +8,9 @@
 | Created | 2026-03-15 |
 | Based On | 202602-shopdata (architecture migrated to Scrapling) |
 | Database | Oracle ADB 26ai (dedicated schema) |
-| App Port | 3190 (Rails serves frontend+backend) |
-| Scraper Port | 3191 (Python FastAPI + Scrapling) |
-| Port Block | 19 (3190-3199) |
+| App Port | 3210 (Rails serves frontend+backend) |
+| Scraper Port | 3211 (Python FastAPI + Scrapling) |
+| Port Block | 19 (3210-3219) |
 | Oracle Schema | PROJ3SHDV2 |
 | Oracle Connection | 202603-shopdatav2 |
 | GitHub Remote | https://github.com/edwjack/202603-shopdatav2.git |
@@ -53,7 +53,7 @@ db/
   cable_migrate/   # Solid Cable SQLite migrations
   seeds.rb         # Initial data
 scraper/           # Python scraping microservice
-  main.py          # FastAPI on port 3191
+  main.py          # FastAPI on port 3211
   parsers/         # HTML parsing modules (Scrapling-based)
 docs/              # PRD, screenshots, decisions
 scripts/           # Dev scripts
@@ -63,7 +63,7 @@ scripts/           # Dev scripts
 
 ```bash
 bin/dev              # Start all (Rails + Tailwind + Jobs + Scraper)
-bin/rails server     # Rails server only (port 3190)
+bin/rails server     # Rails server only (port 3210)
 bin/rails console    # Rails console
 bin/rails db:migrate # Run Oracle migrations
 bin/rails db:seed    # Load seed data
@@ -123,7 +123,7 @@ MCP Oracle 서버는 세션이 끊어질 수 있다 (ORA-17008: Closed connectio
 ## Port Allocation
 
 This project uses port block 19:
-- App (Rails): 3190
-- Scraper (Python FastAPI + Scrapling): 3191
-- WebSocket/Cable: 3192
-- Range: 3190-3199
+- App (Rails): 3210
+- Scraper (Python FastAPI + Scrapling): 3211
+- WebSocket/Cable: 3212
+- Range: 3210-3219
