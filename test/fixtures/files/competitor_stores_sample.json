@@ -1,0 +1,11 @@
+{
+  "stores": {
+    "trend-store": {
+      "total_products": 342,
+      "new_products_7d": 15,
+      "avg_price": 42.50,
+      "category_distribution": {"Home & Living": 120, "Tech Accessories": 89, "Personal Care": 45},
+      "price_changes_7d": 8
+    }
+  }
+}

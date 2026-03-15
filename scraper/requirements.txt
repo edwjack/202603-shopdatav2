@@ -1,0 +1,7 @@
+scrapling[fetchers]
+fastapi
+uvicorn[standard]
+httpx[http2]
+selectolax
+pytrends
+praw

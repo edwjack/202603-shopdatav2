@@ -1,0 +1,13 @@
+{
+  "categories": {
+    "dorm-life": {
+      "reddit_mentions": 45,
+      "reddit_sentiment": 0.72,
+      "reddit_top_posts": [
+        {"title": "Best dorm room setup for 2026", "score": 2341, "subreddit": "BuyItForLife"}
+      ],
+      "tiktok_views": "1.25M",
+      "tiktok_trending_hashtags": ["#dormroom", "#collegeessentials"]
+    }
+  }
+}

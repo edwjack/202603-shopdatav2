@@ -1,0 +1,50 @@
+<% content_for :page_title, "Categories" %>
+
+<!-- Filter tabs -->
+<div class="mb-6 flex space-x-1 bg-white rounded-lg shadow p-1 w-fit">
+  <% [['', 'All'], ['tracking', 'Tracking'], ['approved', 'Approved'], ['sourcing', 'Sourcing'], ['completed', 'Completed']].each do |status_val, label| %>
+    <% active = params[:status].to_s == status_val %>
+    <%= link_to categories_path(status: status_val.presence),
+          class: "px-4 py-2 text-sm font-medium rounded-md transition-colors #{ active ? 'bg-gray-900 text-white' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100' }" do %>
+      <%= label %>
+    <% end %>
+  <% end %>
+</div>
+
+<!-- Category cards grid -->
+<div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+  <% if @categories.empty? %>
+    <div class="col-span-3 text-center py-16 text-gray-500">No categories found.</div>
+  <% else %>
+    <% @categories.each do |category| %>
+      <div class="bg-white shadow rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+        <div class="px-5 py-4">
+          <div class="flex items-start justify-between">
+            <div class="flex-1 min-w-0">
+              <h3 class="text-base font-semibold text-gray-900 truncate"><%= category.name %></h3>
+              <div class="mt-1 flex items-center gap-2">
+                <%= status_badge(category.status) %>
+                <% if category.risk_level.present? %>
+                  <span class="text-xs text-gray-500">Risk: <%= category.risk_level %></span>
+                <% end %>
+              </div>
+            </div>
+          </div>
+          <% if category.target_audience.present? %>
+            <p class="mt-2 text-sm text-gray-500 truncate"><%= category.target_audience %></p>
+          <% end %>
+          <% if category.description.present? %>
+            <p class="mt-2 text-sm text-gray-600 line-clamp-2"><%= category.description %></p>
+          <% end %>
+          <div class="mt-3 flex items-center gap-4 text-xs text-gray-500">
+            <span><%= category.recommendations.count %> recommendations</span>
+            <span><%= category.products.count %> products</span>
+          </div>
+        </div>
+        <div class="bg-gray-50 px-5 py-3 border-t border-gray-100">
+          <%= link_to "View details", category_path(category), class: "text-sm text-blue-600 hover:text-blue-500" %>
+        </div>
+      </div>
+    <% end %>
+  <% end %>
+</div>

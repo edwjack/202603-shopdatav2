@@ -1,0 +1,290 @@
+[
+  {
+    "asin": "B0CK7PZMN4",
+    "images": [
+      "https://m.media-amazon.com/images/I/71CK7PZMN4_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71CK7PZMN4_02_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71CK7PZMN4_03_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Power Source", "value": "Battery Powered"},
+      {"key": "Compatible Pets", "value": "Dog, Cat"},
+      {"key": "Item Weight", "value": "3.2 Pounds"}
+    ],
+    "options": {"Color": ["White", "Gray"], "Size": ["5L", "7L"]},
+    "quantity": 24,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0BX3HQRT2",
+    "images": [
+      "https://m.media-amazon.com/images/I/71BX3HQRT2_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71BX3HQRT2_02_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Stainless Steel, Bamboo"},
+      {"key": "Item Dimensions", "value": "16 x 8 x 6 inches"},
+      {"key": "Compatible Breeds", "value": "Medium, Large"}
+    ],
+    "options": {"Size": ["Small", "Medium", "Large"], "Finish": ["Natural", "Walnut"]},
+    "quantity": 41,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0D2FNLW8V",
+    "images": [
+      "https://m.media-amazon.com/images/I/71D2FNLW8V_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71D2FNLW8V_02_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71D2FNLW8V_03_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71D2FNLW8V_04_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "EVA Foam"},
+      {"key": "Item Dimensions", "value": "35 x 23 inches"},
+      {"key": "Color", "value": "Gray"}
+    ],
+    "options": {"Color": ["Gray", "Brown", "Beige"]},
+    "quantity": 88,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0CF9XMKR1",
+    "images": [
+      "https://m.media-amazon.com/images/I/71CF9XMKR1_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71CF9XMKR1_02_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Food-Grade Silicone"},
+      {"key": "Capacity", "value": "32 Ounces"},
+      {"key": "Item Weight", "value": "0.4 Pounds"}
+    ],
+    "options": {"Color": ["Blue", "Green", "Orange", "Pink"]},
+    "quantity": 63,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0BJQT5NP6",
+    "images": [
+      "https://m.media-amazon.com/images/I/71BJQT5NP6_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71BJQT5NP6_02_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71BJQT5NP6_03_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Silicone, Stainless Steel"},
+      {"key": "Number of Pieces", "value": "6"},
+      {"key": "Heat Resistance", "value": "Up to 600°F"}
+    ],
+    "options": {"Color": ["Black", "Red", "Teal"]},
+    "quantity": 119,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0BN8WKZJ3",
+    "images": [
+      "https://m.media-amazon.com/images/I/71BN8WKZJ3_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71BN8WKZJ3_02_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "ABS Plastic, Stainless Steel"},
+      {"key": "Blade Count", "value": "5 Interchangeable"},
+      {"key": "Thickness Range", "value": "0.5mm - 8mm"}
+    ],
+    "options": {"Color": ["White", "Black"]},
+    "quantity": 56,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0C4VRDTG9",
+    "images": [
+      "https://m.media-amazon.com/images/I/71C4VRDTG9_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71C4VRDTG9_02_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71C4VRDTG9_03_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Natural Latex"},
+      {"key": "Resistance Levels", "value": "5 (10-50 lbs)"},
+      {"key": "Item Weight", "value": "1.8 Pounds"}
+    ],
+    "options": {"Pack Size": ["5-Pack", "11-Pack"]},
+    "quantity": 204,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0CPHMX2LF",
+    "images": [
+      "https://m.media-amazon.com/images/I/71CPHMX2LF_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71CPHMX2LF_02_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "TPE Foam"},
+      {"key": "Item Dimensions", "value": "72 x 24 x 0.24 inches"},
+      {"key": "Item Weight", "value": "2.2 Pounds"}
+    ],
+    "options": {"Color": ["Purple", "Blue", "Black", "Green"], "Thickness": ["4mm", "6mm", "8mm"]},
+    "quantity": 37,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0D7KQSBN5",
+    "images": [
+      "https://m.media-amazon.com/images/I/71D7KQSBN5_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71D7KQSBN5_02_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71D7KQSBN5_03_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "ABS Plastic"},
+      {"key": "Mounting Type", "value": "Adhesive"},
+      {"key": "Weight Capacity", "value": "15 Pounds"}
+    ],
+    "options": {"Color": ["Black", "White"]},
+    "quantity": 72,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0BQZ6MWTH",
+    "images": [
+      "https://m.media-amazon.com/images/I/71BQZ6MWTH_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71BQZ6MWTH_02_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Polypropylene"},
+      {"key": "Capacity", "value": "6 Quarts per bin"},
+      {"key": "Number of Pieces", "value": "6"}
+    ],
+    "options": {"Size": ["6-Pack", "12-Pack"], "Color": ["Clear", "White"]},
+    "quantity": 145,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0CL4NFPJ8",
+    "images": [
+      "https://m.media-amazon.com/images/I/71CL4NFPJ8_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71CL4NFPJ8_02_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71CL4NFPJ8_03_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Stainless Steel"},
+      {"key": "Capacity", "value": "4 Ounces"},
+      {"key": "Number of Pieces", "value": "24"}
+    ],
+    "options": {"Pack Size": ["24-Pack", "48-Pack"]},
+    "quantity": 91,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0B8RYDVK2",
+    "images": [
+      "https://m.media-amazon.com/images/I/71B8RYDVK2_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71B8RYDVK2_02_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "EVA Foam"},
+      {"key": "Item Dimensions", "value": "18 x 5.4 inches"},
+      {"key": "Density", "value": "High"}
+    ],
+    "options": {"Size": ["13 inch", "18 inch", "36 inch"], "Style": ["Smooth", "Grid", "Trigger Point"]},
+    "quantity": 58,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0CXWG3MNP",
+    "images": [
+      "https://m.media-amazon.com/images/I/71CXWG3MNP_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71CXWG3MNP_02_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71CXWG3MNP_03_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Bamboo"},
+      {"key": "Number of Pieces", "value": "8"},
+      {"key": "Compatible Drawer Width", "value": "Expandable"}
+    ],
+    "options": {"Color": ["Natural", "Dark"]},
+    "quantity": 33,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0D5HQLTF7",
+    "images": [],
+    "overview": [],
+    "options": {},
+    "quantity": 7,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0BM2XKZQ4",
+    "images": [],
+    "overview": [],
+    "options": {},
+    "quantity": 4,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0C9RVNWJ6",
+    "images": [
+      "https://m.media-amazon.com/images/I/71C9RVNWJ6_AC_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Metal Wire"},
+      {"key": "Compatible Pets", "value": "Dog, Cat"}
+    ],
+    "options": {"Size": ["Small", "Medium", "Large"]},
+    "quantity": 1,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0BDPFTNH1",
+    "images": [
+      "https://m.media-amazon.com/images/I/71BDPFTNH1_AC_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Aluminum, PVC Coated Steel"},
+      {"key": "Cable Length", "value": "Adjustable to 11 feet"}
+    ],
+    "options": {"Color": ["Black", "Blue", "Red"]},
+    "quantity": 2,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0CG6ZMRQ3",
+    "images": [
+      "https://m.media-amazon.com/images/I/71CG6ZMRQ3_AC_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Tritan Plastic"},
+      {"key": "Number of Pieces", "value": "20"}
+    ],
+    "options": {"Color": ["Clear", "Teal"]},
+    "quantity": 0,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0D1BKXPW8",
+    "images": [
+      "https://m.media-amazon.com/images/I/71D1BKXPW8_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71D1BKXPW8_02_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Polyester, Zinc Alloy"},
+      {"key": "Length", "value": "6 Feet"},
+      {"key": "Width", "value": "1.5 Inches"}
+    ],
+    "options": {"Color": ["Black", "Red", "Blue", "Purple"]},
+    "quantity": 77,
+    "scraper_status": "completed"
+  },
+  {
+    "asin": "B0BVJNZKF5",
+    "images": [
+      "https://m.media-amazon.com/images/I/71BVJNZKF5_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71BVJNZKF5_02_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Genuine Leather"},
+      {"key": "Compatible Devices", "value": "Apple AirTag"},
+      {"key": "Size Options", "value": "Small, Medium, Large"}
+    ],
+    "options": {"Size": ["Small", "Medium", "Large"], "Color": ["Brown", "Black", "Tan"]},
+    "quantity": 18,
+    "scraper_status": "completed"
+  }
+]

@@ -1,0 +1,11 @@
+{
+  "categories": {
+    "dorm-life": {
+      "movers_count": 12,
+      "avg_bsr_change_pct": 340,
+      "top_movers": [
+        {"asin": "B0MOVER01", "title": "Clip-on Reading Light", "bsr_change_pct": 890, "current_bsr": 456}
+      ]
+    }
+  }
+}

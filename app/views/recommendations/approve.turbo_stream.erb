@@ -1,0 +1,6 @@
+<%= turbo_stream.replace "recommendation_#{@recommendation.id}" do %>
+  <%= render "recommendation_card", recommendation: @recommendation %>
+<% end %>
+<%= turbo_stream.prepend "recommendations_list" do %>
+  <%= render "shared/flash" %>
+<% end %>

@@ -1,0 +1,21 @@
+{
+  "data": {
+    "productCreate": {
+      "product": {
+        "id": "gid://shopify/Product/8234567890123",
+        "title": "PetSafe Automatic Pet Feeder with Portion Control",
+        "variants": {
+          "edges": [
+            {
+              "node": {
+                "id": "gid://shopify/ProductVariant/4567890123456",
+                "price": "74.99"
+              }
+            }
+          ]
+        }
+      },
+      "userErrors": []
+    }
+  }
+}

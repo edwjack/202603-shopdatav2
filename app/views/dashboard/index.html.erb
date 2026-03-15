@@ -1,0 +1,260 @@
+<% content_for :page_title, "Dashboard" %>
+
+<!-- Stats row 1 -->
+<div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-5">
+  <div class="bg-white overflow-hidden shadow rounded-lg">
+    <div class="p-5">
+      <div class="text-sm font-medium text-gray-500 truncate">Pending Recommendations</div>
+      <div class="mt-1 text-3xl font-semibold text-yellow-600"><%= @pending_count %></div>
+    </div>
+    <div class="bg-gray-50 px-5 py-3">
+      <%= link_to "View all", recommendations_path(status: 'pending'), class: "text-sm text-blue-600 hover:text-blue-500" %>
+    </div>
+  </div>
+
+  <div class="bg-white overflow-hidden shadow rounded-lg">
+    <div class="p-5">
+      <div class="text-sm font-medium text-gray-500 truncate">Approved This Week</div>
+      <div class="mt-1 text-3xl font-semibold text-green-600"><%= @this_week_count %></div>
+    </div>
+    <div class="bg-gray-50 px-5 py-3">
+      <%= link_to "View approved", recommendations_path(status: 'approved'), class: "text-sm text-blue-600 hover:text-blue-500" %>
+    </div>
+  </div>
+
+  <div class="bg-white overflow-hidden shadow rounded-lg">
+    <div class="p-5">
+      <div class="text-sm font-medium text-gray-500 truncate">Categories Tracking</div>
+      <div class="mt-1 text-3xl font-semibold text-blue-600"><%= @categories_tracking %></div>
+    </div>
+    <div class="bg-gray-50 px-5 py-3">
+      <%= link_to "View categories", categories_path, class: "text-sm text-blue-600 hover:text-blue-500" %>
+    </div>
+  </div>
+
+  <div class="bg-white overflow-hidden shadow rounded-lg">
+    <div class="p-5">
+      <div class="text-sm font-medium text-gray-500 truncate">Products Published</div>
+      <div class="mt-1 text-3xl font-semibold text-purple-600"><%= @published_products %></div>
+    </div>
+    <div class="bg-gray-50 px-5 py-3">
+      <%= link_to "View products", products_path, class: "text-sm text-blue-600 hover:text-blue-500" %>
+    </div>
+  </div>
+</div>
+
+<!-- Stats row 2 -->
+<div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+  <div class="bg-white overflow-hidden shadow rounded-lg">
+    <div class="p-5">
+      <div class="text-sm font-medium text-gray-500 truncate">Total Categories</div>
+      <div class="mt-1 text-3xl font-semibold text-gray-700"><%= @total_categories %></div>
+    </div>
+    <div class="bg-gray-50 px-5 py-3">
+      <%= link_to "View all", categories_path, class: "text-sm text-blue-600 hover:text-blue-500" %>
+    </div>
+  </div>
+
+  <div class="bg-white overflow-hidden shadow rounded-lg">
+    <div class="p-5">
+      <div class="text-sm font-medium text-gray-500 truncate">Shopify Pending</div>
+      <div class="mt-1 text-3xl font-semibold text-yellow-600"><%= @shopify_stats[:pending] %></div>
+    </div>
+    <div class="bg-gray-50 px-5 py-3">
+      <%= link_to "View pending", products_path(shopify_status: 'pending'), class: "text-sm text-blue-600 hover:text-blue-500" %>
+    </div>
+  </div>
+
+  <div class="bg-white overflow-hidden shadow rounded-lg">
+    <div class="p-5">
+      <div class="text-sm font-medium text-gray-500 truncate">Shopify Failed</div>
+      <div class="mt-1 text-3xl font-semibold text-red-600"><%= @shopify_stats[:failed] %></div>
+    </div>
+    <div class="bg-gray-50 px-5 py-3">
+      <%= link_to "View failed", products_path(shopify_status: 'failed'), class: "text-sm text-blue-600 hover:text-blue-500" %>
+    </div>
+  </div>
+
+  <div class="bg-white overflow-hidden shadow rounded-lg">
+    <div class="p-5">
+      <div class="text-sm font-medium text-gray-500 truncate">Active Pipelines</div>
+      <div class="mt-1 text-3xl font-semibold text-indigo-600"><%= @active_pipelines %></div>
+    </div>
+    <div class="bg-gray-50 px-5 py-3">
+      <%= link_to "View jobs", jobs_path, class: "text-sm text-blue-600 hover:text-blue-500" %>
+    </div>
+  </div>
+</div>
+
+<!-- System Health -->
+<div class="bg-white shadow rounded-lg mb-8">
+  <div class="px-6 py-4 border-b border-gray-200">
+    <h2 class="text-lg font-medium text-gray-900">System Health</h2>
+  </div>
+  <div class="p-6">
+    <!-- Scraper Process Status -->
+    <div class="mb-6">
+      <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Scraper Process</h3>
+      <% scraper_open = @scraper_status[:open] %>
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <%= scraper_open ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800' %>">
+          <%= scraper_open ? 'Circuit Open' : 'Healthy' %>
+        </span>
+        <% if @scraper_status[:failures].to_i > 0 %>
+          <span class="text-xs text-gray-500"><%= @scraper_status[:failures] %> failure(s)</span>
+        <% end %>
+        <% if @scraper_status[:opened_at] %>
+          <span class="text-xs text-gray-500">opened <%= time_ago_in_words(@scraper_status[:opened_at]) %> ago</span>
+        <% end %>
+      </div>
+    </div>
+
+    <!-- Collector Success Rates (7-day) -->
+    <div class="mb-6">
+      <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Collector Success Rates (7d)</h3>
+      <% collector_labels = {
+        'amazon_bsr' => 'Amazon BSR',
+        'movers_shakers' => 'Movers & Shakers',
+        'google_trends' => 'Google Trends',
+        'social_signal' => 'Social Signal',
+        'competitor_monitor' => 'Competitor Monitor'
+      } %>
+      <% if @scrape_trends.any? %>
+        <div class="space-y-2">
+          <% @scrape_trends.each do |trend| %>
+            <% rate = trend.avg_success_rate.to_f %>
+            <% rate_class = rate >= 90 ? 'text-green-700 bg-green-50' : rate >= 70 ? 'text-yellow-700 bg-yellow-50' : 'text-red-700 bg-red-50' %>
+            <% circuit = @scraping_status[trend.collector_name] || { failures: 0, open: false } %>
+            <div class="flex items-center justify-between py-1.5 px-3 rounded <%= rate_class %>">
+              <span class="text-sm font-medium"><%= collector_labels[trend.collector_name] || trend.collector_name %></span>
+              <div class="flex items-center gap-4 text-xs">
+                <span><%= rate.round(1) %>% success</span>
+                <span><%= trend.total_runs.to_i %> run(s)</span>
+                <% if trend.total_failures.to_i > 0 %>
+                  <span><%= trend.total_failures.to_i %> failure(s)</span>
+                <% end %>
+                <% if circuit[:open] %>
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-red-100 text-red-800 font-medium">Circuit Open</span>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      <% else %>
+        <p class="text-sm text-gray-500">No collector metrics yet. Collectors will report here after first run.</p>
+      <% end %>
+    </div>
+
+    <!-- Data Freshness per Category -->
+    <div>
+      <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Data Freshness</h3>
+      <% if @data_freshness.any? %>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-200">
+                <th class="text-left py-2 pr-6 text-xs text-gray-500 font-medium">Category</th>
+                <th class="text-left py-2 pr-6 text-xs text-gray-500 font-medium">Last Snapshot</th>
+                <th class="text-left py-2 text-xs text-gray-500 font-medium">Age</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <% @data_freshness.each do |item| %>
+                <% age_h = item[:age_hours] %>
+                <% if age_h.nil? %>
+                  <% age_class = 'text-red-600' %>
+                  <% age_label = 'No data' %>
+                <% elsif age_h < 24 %>
+                  <% age_class = 'text-green-600' %>
+                  <% age_label = "#{age_h}h ago" %>
+                <% elsif age_h < 48 %>
+                  <% age_class = 'text-yellow-600' %>
+                  <% age_label = "#{age_h}h ago" %>
+                <% else %>
+                  <% age_class = 'text-red-600' %>
+                  <% age_label = "#{age_h}h ago" %>
+                <% end %>
+                <tr>
+                  <td class="py-2 pr-6 text-gray-700 font-medium"><%= item[:category].name %></td>
+                  <td class="py-2 pr-6 text-gray-500"><%= item[:last_snapshot]&.strftime("%Y-%m-%d") || '-' %></td>
+                  <td class="py-2 <%= age_class %> font-medium">
+                    <%= age_label %>
+                    <% if item[:stale] %>
+                      <span class="ml-1 text-xs">(stale)</span>
+                    <% end %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      <% else %>
+        <p class="text-sm text-gray-500">No tracking categories yet.</p>
+      <% end %>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Sourcing Batches -->
+<div class="bg-white shadow rounded-lg mb-8">
+  <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+    <h2 class="text-lg font-medium text-gray-900">Recent Sourcing Batches</h2>
+  </div>
+  <% if @recent_batches.any? %>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phase</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Progress</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          <% @recent_batches.each do |batch| %>
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900"><%= batch.category&.name || 'Unknown' %></td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><%= batch.phase %></td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm"><%= status_badge(batch.status) %></td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-700"><%= batch.progress_percentage %>%</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><%= format_date(batch.created_at) %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <div class="px-6 py-8 text-center text-gray-500">No sourcing batches yet.</div>
+  <% end %>
+</div>
+
+<!-- Recent Recommendations -->
+<div class="bg-white shadow rounded-lg">
+  <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+    <h2 class="text-lg font-medium text-gray-900">Recent Pending Recommendations</h2>
+    <%= link_to "View all", recommendations_path, class: "text-sm text-blue-600 hover:text-blue-500" %>
+  </div>
+  <div class="divide-y divide-gray-200">
+    <% if @recent_recommendations.empty? %>
+      <div class="px-6 py-8 text-center text-gray-500">No pending recommendations.</div>
+    <% else %>
+      <% @recent_recommendations.each do |rec| %>
+        <div class="px-6 py-4 flex items-center justify-between">
+          <div>
+            <div class="text-sm font-medium text-gray-900"><%= rec.category&.name || "Unknown Category" %></div>
+            <div class="text-sm text-gray-500 mt-1 line-clamp-2"><%= rec.insight&.truncate(120) %></div>
+            <div class="text-xs text-gray-400 mt-1"><%= format_date(rec.created_at) %></div>
+          </div>
+          <div class="ml-6 flex items-center gap-3">
+            <span class="inline-flex items-center justify-center w-10 h-10 rounded-full text-sm font-bold <%= score_color(rec.score) %>">
+              <%= rec.score %>
+            </span>
+            <%= link_to "Review", recommendation_path(rec), class: "text-sm text-blue-600 hover:text-blue-500 whitespace-nowrap" %>
+          </div>
+        </div>
+      <% end %>
+    <% end %>
+  </div>
+</div>

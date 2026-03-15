@@ -1,0 +1,33 @@
+<% content_for :page_title, "Recommendations" %>
+
+<!-- Filter tabs + counter -->
+<div class="mb-6 flex items-center justify-between">
+  <div class="flex space-x-1 bg-white rounded-lg shadow p-1">
+    <% [['pending', 'Pending'], ['approved', 'Approved'], ['rejected', 'Rejected'], ['on_hold', 'On Hold'], ['all', 'All']].each do |status_val, label| %>
+      <% active = @status == status_val %>
+      <%= link_to recommendations_path(status: status_val),
+            class: "px-4 py-2 text-sm font-medium rounded-md transition-colors #{ active ? 'bg-gray-900 text-white' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100' }" do %>
+        <%= label %>
+        <% if status_val == 'pending' && @pending_count > 0 %>
+          <span class="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full bg-yellow-400 text-yellow-900"><%= @pending_count %></span>
+        <% end %>
+      <% end %>
+    <% end %>
+  </div>
+  <div class="text-sm text-gray-500">
+    This week: <span class="font-semibold text-gray-900"><%= @this_week_count %></span> new
+  </div>
+</div>
+
+<!-- Recommendation cards -->
+<div id="recommendations_list" class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+  <% if @recommendations.empty? %>
+    <div class="col-span-2 text-center py-16 text-gray-500">
+      No recommendations with status "<%= @status %>".
+    </div>
+  <% else %>
+    <% @recommendations.each do |recommendation| %>
+      <%= render "recommendation_card", recommendation: recommendation %>
+    <% end %>
+  <% end %>
+</div>

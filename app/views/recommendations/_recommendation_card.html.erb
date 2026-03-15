@@ -1,0 +1,149 @@
+<turbo-frame id="recommendation_<%= recommendation.id %>">
+  <div class="bg-white shadow rounded-lg overflow-hidden">
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-gray-200 flex items-start justify-between">
+      <div>
+        <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Category</div>
+        <div class="text-base font-semibold text-gray-900">
+          <%= recommendation.category&.name || "Unknown" %>
+        </div>
+        <div class="mt-1"><%= status_badge(recommendation.status) %></div>
+      </div>
+      <div class="flex-shrink-0 ml-4">
+        <div class="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold <%= score_color(recommendation.score) %>">
+          <%= recommendation.score %>
+        </div>
+      </div>
+    </div>
+
+    <!-- Score breakdown -->
+    <div class="px-6 py-4" data-controller="score-chart">
+      <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Score Breakdown</div>
+      <% score_labels = {
+           'demand_stability'      => '수요 안정성',
+           'growth_momentum'       => '성장 모멘텀',
+           'competition_landscape' => '경쟁 환경',
+           'margin_potential'      => '마진 잠재력',
+           'cs_risk'               => 'CS 리스크',
+           'category_killer_fit'   => '카킬러 적합도'
+         } %>
+      <% breakdown = recommendation.score_breakdown_data %>
+      <% score_labels.each do |key, label| %>
+        <% val = breakdown[key] %>
+        <% score_val = val.is_a?(Hash) ? val['score'].to_f : val.to_f %>
+        <div class="mb-2">
+          <div class="flex items-center justify-between text-xs mb-1">
+            <span class="text-gray-600"><%= label %></span>
+            <span class="font-semibold text-gray-900"><%= score_val.round(1) %></span>
+          </div>
+          <div class="w-full bg-gray-100 rounded-full h-2">
+            <div class="h-2 rounded-full transition-all"
+                 data-score-chart-target="bar"
+                 data-score="<%= score_val %>"></div>
+          </div>
+        </div>
+      <% end %>
+    </div>
+
+    <!-- AI Insight -->
+    <% if recommendation.insight.present? %>
+      <div class="px-6 pb-3" data-controller="expand">
+        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">AI Insight</div>
+        <div data-expand-target="content" class="text-sm text-gray-700 overflow-hidden" style="max-height: 4.5rem;">
+          <%= recommendation.insight %>
+        </div>
+        <button data-action="click->expand#toggle"
+                data-expand-target="button"
+                class="mt-1 text-xs text-blue-600 hover:text-blue-500">Show more</button>
+      </div>
+    <% end %>
+
+    <!-- Risks -->
+    <% risks = recommendation.risks_data %>
+    <% if risks.any? %>
+      <div class="px-6 pb-3">
+        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Risks</div>
+        <ul class="list-disc list-inside space-y-1">
+          <% risks.each do |risk| %>
+            <li class="text-sm text-red-700"><%= risk %></li>
+          <% end %>
+        </ul>
+      </div>
+    <% end %>
+
+    <!-- Action Items -->
+    <% actions = recommendation.action_items_data %>
+    <% if actions.any? %>
+      <div class="px-6 pb-3">
+        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Action Items</div>
+        <ul class="space-y-1">
+          <% actions.each do |item| %>
+            <li class="flex items-start gap-2 text-sm text-gray-700">
+              <span class="mt-0.5 flex-shrink-0 w-4 h-4 border border-gray-300 rounded"></span>
+              <%= item %>
+            </li>
+          <% end %>
+        </ul>
+      </div>
+    <% end %>
+
+    <!-- Action buttons (only for pending) -->
+    <% if recommendation.status == 'pending' %>
+      <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center gap-3">
+        <%= button_to approve_recommendation_path(recommendation),
+              method: :patch,
+              class: "flex-1 rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-500 text-center" do %>
+          Approve
+        <% end %>
+
+        <div data-controller="modal">
+          <button data-action="click->modal#open"
+                  class="flex-1 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500">
+            Reject
+          </button>
+          <!-- Modal -->
+          <div data-modal-target="dialog"
+               class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+              <h3 class="text-lg font-semibold text-gray-900 mb-4">Reject Recommendation</h3>
+              <%= form_with url: reject_recommendation_path(recommendation), method: :patch do |f| %>
+                <div class="mb-4">
+                  <label class="block text-sm font-medium text-gray-700 mb-2">Reason (min 10 characters)</label>
+                  <%= f.text_area :rejection_reason,
+                        data: { modal_target: "reason" },
+                        rows: 4,
+                        class: "block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm",
+                        placeholder: "Enter rejection reason..." %>
+                </div>
+                <div class="flex gap-3">
+                  <button type="button"
+                          data-action="click->modal#close"
+                          class="flex-1 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                    Cancel
+                  </button>
+                  <button type="submit"
+                          data-action="click->modal#submit"
+                          class="flex-1 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500">
+                    Confirm Reject
+                  </button>
+                </div>
+              <% end %>
+            </div>
+          </div>
+        </div>
+
+        <%= button_to hold_recommendation_path(recommendation),
+              method: :patch,
+              class: "flex-1 rounded-md bg-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-300 text-center" do %>
+          Hold
+        <% end %>
+      </div>
+    <% end %>
+
+    <!-- Footer link -->
+    <div class="px-6 py-2 border-t border-gray-100">
+      <%= link_to "View details", recommendation_path(recommendation), class: "text-xs text-blue-600 hover:text-blue-500" %>
+      <span class="text-xs text-gray-400 ml-3"><%= format_date(recommendation.created_at) %></span>
+    </div>
+  </div>
+</turbo-frame>

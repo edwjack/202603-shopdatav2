@@ -1,0 +1,11 @@
+{
+  "categories": {
+    "dorm-life": {
+      "interest_over_time": 72,
+      "cv": 0.34,
+      "yoy_change": "+15%",
+      "related_rising": ["dorm room essentials 2026", "college move in list"],
+      "regional_interest": {"California": 85, "New York": 78, "Texas": 71}
+    }
+  }
+}

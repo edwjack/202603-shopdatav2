@@ -1,0 +1,298 @@
+[
+  {
+    "asin": "B0CK7PZMN4",
+    "title": "PetSafe Automatic Pet Feeder",
+    "brand": "PetSafe",
+    "price": 49.99,
+    "about_this": [
+      "Programmable feeding schedule up to 12 meals per day",
+      "Portion sizes from 1/8 cup to 4 cups per meal",
+      "Voice recorder lets you call your pet to meals",
+      "Battery powered for feeding even during power outages",
+      "Dishwasher-safe food tray for easy cleaning"
+    ],
+    "tags": ["pet-feeder", "automatic", "cats", "dogs"],
+    "review_rating": 4.6,
+    "review_count": 3241,
+    "category_id": 1,
+    "category_name": "Pet Supplies",
+    "images": [
+      "https://m.media-amazon.com/images/I/71CK7PZMN4_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71CK7PZMN4_02_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71CK7PZMN4_03_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Power Source", "value": "Battery Powered"},
+      {"key": "Compatible Pets", "value": "Dog, Cat"},
+      {"key": "Item Weight", "value": "3.2 Pounds"}
+    ],
+    "options": {"Color": ["White", "Gray"], "Size": ["5L", "7L"]},
+    "quantity": 24
+  },
+  {
+    "asin": "B0BX3HQRT2",
+    "title": "Elevated Dog Bowl Stand",
+    "brand": "YumNaturals",
+    "price": 34.99,
+    "about_this": [
+      "Raised feeder reduces strain on neck and joints",
+      "Two 64oz stainless steel bowls included",
+      "Adjustable height 6 to 12 inches",
+      "Non-slip rubber feet prevent sliding",
+      "Suitable for medium to large breeds"
+    ],
+    "tags": ["dog-bowl", "elevated", "stainless-steel"],
+    "review_rating": 4.4,
+    "review_count": 1876,
+    "category_id": 1,
+    "category_name": "Pet Supplies",
+    "images": [
+      "https://m.media-amazon.com/images/I/71BX3HQRT2_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71BX3HQRT2_02_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Stainless Steel, Bamboo"},
+      {"key": "Item Dimensions", "value": "16 x 8 x 6 inches"},
+      {"key": "Compatible Breeds", "value": "Medium, Large"}
+    ],
+    "options": {"Size": ["Small", "Medium", "Large"], "Finish": ["Natural", "Walnut"]},
+    "quantity": 41
+  },
+  {
+    "asin": "B0D2FNLW8V",
+    "title": "Cat Litter Mat XL",
+    "brand": "Gorilla Grip",
+    "price": 39.99,
+    "about_this": [
+      "Double-layer honeycomb design traps litter particles",
+      "Extra large 35x23 inch size fits most litter boxes",
+      "Waterproof bottom layer prevents leaks",
+      "Easy to clean — shake, vacuum, or rinse",
+      "Soft on sensitive paws"
+    ],
+    "tags": ["cat-litter", "mat", "scatter-control"],
+    "review_rating": 4.5,
+    "review_count": 5102,
+    "category_id": 1,
+    "category_name": "Pet Supplies",
+    "images": [
+      "https://m.media-amazon.com/images/I/71D2FNLW8V_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71D2FNLW8V_02_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71D2FNLW8V_03_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71D2FNLW8V_04_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "EVA Foam"},
+      {"key": "Item Dimensions", "value": "35 x 23 inches"},
+      {"key": "Color", "value": "Gray"}
+    ],
+    "options": {"Color": ["Gray", "Brown", "Beige"]},
+    "quantity": 88
+  },
+  {
+    "asin": "B0CF9XMKR1",
+    "title": "Silicone Collapsible Dog Travel Bowl",
+    "brand": "Tuff Pupper",
+    "price": 32.99,
+    "about_this": [
+      "Food-grade BPA-free silicone safe for pets",
+      "Folds flat to under 1 inch thick for easy packing",
+      "Holds 32oz — ideal for water and food on the go",
+      "Carabiner clip attaches to leash or backpack",
+      "Dishwasher safe top rack"
+    ],
+    "tags": ["dog-bowl", "travel", "collapsible", "portable"],
+    "review_rating": 4.7,
+    "review_count": 892,
+    "category_id": 1,
+    "category_name": "Pet Supplies",
+    "images": [
+      "https://m.media-amazon.com/images/I/71CF9XMKR1_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71CF9XMKR1_02_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Food-Grade Silicone"},
+      {"key": "Capacity", "value": "32 Ounces"},
+      {"key": "Item Weight", "value": "0.4 Pounds"}
+    ],
+    "options": {"Color": ["Blue", "Green", "Orange", "Pink"]},
+    "quantity": 63
+  },
+  {
+    "asin": "B0BJQT5NP6",
+    "title": "Kitchen Silicone Utensil Set",
+    "brand": "OXO Good Grips",
+    "price": 44.99,
+    "about_this": [
+      "Set includes spatula, spoon, slotted spoon, ladle, pasta server, and tongs",
+      "Heat resistant up to 600F",
+      "Stainless steel cores with soft silicone heads",
+      "Dishwasher safe for easy cleanup",
+      "Hanging loop on each utensil for convenient storage"
+    ],
+    "tags": ["kitchen-utensils", "silicone", "cooking-tools"],
+    "review_rating": 4.8,
+    "review_count": 4320,
+    "category_id": 2,
+    "category_name": "Kitchen Gadgets",
+    "images": [
+      "https://m.media-amazon.com/images/I/71BJQT5NP6_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71BJQT5NP6_02_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71BJQT5NP6_03_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Silicone, Stainless Steel"},
+      {"key": "Number of Pieces", "value": "6"},
+      {"key": "Heat Resistance", "value": "Up to 600°F"}
+    ],
+    "options": {"Color": ["Black", "Red", "Teal"]},
+    "quantity": 119
+  },
+  {
+    "asin": "B0BN8WKZJ3",
+    "title": "Mandoline Slicer Adjustable",
+    "brand": "Mueller Austria",
+    "price": 37.99,
+    "about_this": [
+      "5 interchangeable blades for slicing, julienne, and dicing",
+      "Adjustable thickness 0.5mm to 8mm",
+      "Non-slip feet and ergonomic hand guard included",
+      "Wide chute accommodates full-size vegetables",
+      "All parts dishwasher safe"
+    ],
+    "tags": ["mandoline", "slicer", "vegetable-cutter"],
+    "review_rating": 4.3,
+    "review_count": 2654,
+    "category_id": 2,
+    "category_name": "Kitchen Gadgets",
+    "images": [
+      "https://m.media-amazon.com/images/I/71BN8WKZJ3_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71BN8WKZJ3_02_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "ABS Plastic, Stainless Steel"},
+      {"key": "Blade Count", "value": "5 Interchangeable"},
+      {"key": "Thickness Range", "value": "0.5mm - 8mm"}
+    ],
+    "options": {"Color": ["White", "Black"]},
+    "quantity": 56
+  },
+  {
+    "asin": "B0C4VRDTG9",
+    "title": "Resistance Bands Set 5-Pack",
+    "brand": "FitBeast",
+    "price": 31.99,
+    "about_this": [
+      "Set of 5 bands ranging from 10 to 50 lbs resistance",
+      "Premium natural latex construction for durability",
+      "Includes foam handles, ankle straps, door anchor, and carry bag",
+      "Suitable for home gym, physical therapy, and travel workouts",
+      "Color-coded by resistance level for easy selection"
+    ],
+    "tags": ["resistance-bands", "fitness", "home-gym"],
+    "review_rating": 4.5,
+    "review_count": 7832,
+    "category_id": 5,
+    "category_name": "Fitness Accessories",
+    "images": [
+      "https://m.media-amazon.com/images/I/71C4VRDTG9_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71C4VRDTG9_02_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71C4VRDTG9_03_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Natural Latex"},
+      {"key": "Resistance Levels", "value": "5 (10-50 lbs)"},
+      {"key": "Item Weight", "value": "1.8 Pounds"}
+    ],
+    "options": {"Pack Size": ["5-Pack", "11-Pack"]},
+    "quantity": 204
+  },
+  {
+    "asin": "B0CPHMX2LF",
+    "title": "Yoga Mat Non-Slip 6mm",
+    "brand": "Gaiam",
+    "price": 42.99,
+    "about_this": [
+      "6mm thick premium TPE foam provides cushion and joint support",
+      "Textured non-slip surface for stability in all poses",
+      "Includes carry strap for easy transport",
+      "72x24 inches standard size fits most body types",
+      "Free from toxic materials — PVC, latex, and phthalate free"
+    ],
+    "tags": ["yoga-mat", "non-slip", "exercise"],
+    "review_rating": 4.6,
+    "review_count": 11204,
+    "category_id": 5,
+    "category_name": "Fitness Accessories",
+    "images": [
+      "https://m.media-amazon.com/images/I/71CPHMX2LF_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71CPHMX2LF_02_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "TPE Foam"},
+      {"key": "Item Dimensions", "value": "72 x 24 x 0.24 inches"},
+      {"key": "Item Weight", "value": "2.2 Pounds"}
+    ],
+    "options": {"Color": ["Purple", "Blue", "Black", "Green"], "Thickness": ["4mm", "6mm", "8mm"]},
+    "quantity": 37
+  },
+  {
+    "asin": "B0D7KQSBN5",
+    "title": "Under Desk Storage Organizer",
+    "brand": "SimpleHouseware",
+    "price": 35.99,
+    "about_this": [
+      "Mounts under desk without drilling using strong adhesive strips",
+      "Hidden storage keeps desk surface clutter free",
+      "Holds up to 15 lbs — suitable for notebooks, tablets, and accessories",
+      "Smooth slide mechanism for quiet operation",
+      "Dimensions: 14 x 9 x 3 inches"
+    ],
+    "tags": ["desk-organizer", "under-desk", "storage"],
+    "review_rating": 4.4,
+    "review_count": 1543,
+    "category_id": 4,
+    "category_name": "Home Organization",
+    "images": [
+      "https://m.media-amazon.com/images/I/71D7KQSBN5_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71D7KQSBN5_02_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71D7KQSBN5_03_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "ABS Plastic"},
+      {"key": "Mounting Type", "value": "Adhesive"},
+      {"key": "Weight Capacity", "value": "15 Pounds"}
+    ],
+    "options": {"Color": ["Black", "White"]},
+    "quantity": 72
+  },
+  {
+    "asin": "B0BQZ6MWTH",
+    "title": "Stackable Storage Bins 6-Pack",
+    "brand": "IRIS USA",
+    "price": 52.99,
+    "about_this": [
+      "Set of 6 clear bins with snap-on lids for secure closure",
+      "Stackable design maximizes vertical storage space",
+      "See-through sides for quick content identification",
+      "Durable BPA-free plastic withstands regular use",
+      "Each bin holds 6 quarts — ideal for pantry, closet, or garage"
+    ],
+    "tags": ["storage-bins", "stackable", "clear", "organizer"],
+    "review_rating": 4.7,
+    "review_count": 3089,
+    "category_id": 4,
+    "category_name": "Home Organization",
+    "images": [
+      "https://m.media-amazon.com/images/I/71BQZ6MWTH_AC_SL1500.jpg",
+      "https://m.media-amazon.com/images/I/71BQZ6MWTH_02_SL1500.jpg"
+    ],
+    "overview": [
+      {"key": "Material", "value": "Polypropylene"},
+      {"key": "Capacity", "value": "6 Quarts per bin"},
+      {"key": "Number of Pieces", "value": "6"}
+    ],
+    "options": {"Size": ["6-Pack", "12-Pack"], "Color": ["Clear", "White"]},
+    "quantity": 145
+  }
+]

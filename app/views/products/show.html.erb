@@ -1,0 +1,149 @@
+<% content_for :page_title, @product.title || @product.asin %>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <!-- Main content -->
+  <div class="lg:col-span-2 space-y-6">
+    <!-- Basic info -->
+    <div class="bg-white shadow rounded-lg px-6 py-5">
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <span class="font-mono text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded"><%= @product.asin %></span>
+          <% if @product.brand.present? %>
+            <span class="ml-2 text-sm text-gray-500"><%= @product.brand %></span>
+          <% end %>
+        </div>
+        <% if @product.price %>
+          <span class="text-2xl font-bold text-gray-900">$<%= @product.price %></span>
+        <% end %>
+      </div>
+
+      <!-- Status badges -->
+      <div class="flex flex-wrap gap-2 mb-4">
+        <div><span class="text-xs text-gray-500 mr-1">Sourcing:</span><%= status_badge(@product.sourcing_status || 'pending') %></div>
+        <div><span class="text-xs text-gray-500 mr-1">Scraper:</span><%= status_badge(@product.scraper_status || 'pending') %></div>
+        <div id="shopify-status">
+          <span class="text-xs text-gray-500 mr-1">Shopify:</span><%= status_badge(@product.shopify_status || 'pending') %>
+        </div>
+      </div>
+
+      <!-- Shopify error -->
+      <% if @product.shopify_error.present? %>
+        <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+          <p class="text-sm text-red-700"><strong>Shopify Error:</strong> <%= @product.shopify_error %></p>
+        </div>
+      <% end %>
+
+      <div class="flex items-center gap-4">
+        <% asin_url = "https://www.amazon.com/dp/#{@product.asin}" %>
+        <a href="<%= asin_url %>" target="_blank" rel="noopener noreferrer"
+           class="text-sm text-blue-600 hover:text-blue-500">View on Amazon &rarr;</a>
+
+        <!-- Publish to Shopify button -->
+        <% if @product.sourcing_status == 'approved' && @product.scraper_status == 'completed' && @product.shopify_status != 'publishing' %>
+          <%= button_to "Publish to Shopify",
+                publish_shopify_product_path(@product),
+                method: :patch,
+                class: "inline-flex items-center rounded-md bg-green-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-green-500",
+                data: { turbo_confirm: "Publish #{@product.title&.truncate(40)} to Shopify?" } %>
+        <% end %>
+      </div>
+    </div>
+
+    <!-- Product detail metrics -->
+    <div class="bg-white shadow rounded-lg px-6 py-5">
+      <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">Metrics</h2>
+      <dl class="grid grid-cols-2 gap-4 text-sm">
+        <% [
+          ['Reviews', @product.review_count],
+          ['Rating', @product.review_rating ? "#{@product.review_rating}/5" : nil],
+          ['Category', @product.category&.name],
+          ['Margin Rate', @product.category&.margin_rate ? "#{@product.category.margin_rate}%" : nil],
+          ['Shopify Price', @product.shopify_price ? "$#{@product.shopify_price}" : nil]
+        ].each do |label, val| %>
+          <% next if val.nil? %>
+          <div>
+            <dt class="text-gray-500"><%= label %></dt>
+            <dd class="font-medium text-gray-900"><%= val %></dd>
+          </div>
+        <% end %>
+      </dl>
+    </div>
+
+    <!-- About This (JSON) -->
+    <%
+      about_items = begin
+        @product.about_this.present? ? JSON.parse(@product.about_this) : []
+      rescue JSON::ParserError, TypeError
+        []
+      end
+    %>
+    <% if about_items.any? %>
+      <div class="bg-white shadow rounded-lg px-6 py-5">
+        <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">About This Item</h2>
+        <ul class="space-y-2">
+          <% about_items.each do |item| %>
+            <li class="flex items-start gap-2 text-sm text-gray-700">
+              <span class="mt-1 flex-shrink-0 text-gray-400">&bull;</span>
+              <%= item %>
+            </li>
+          <% end %>
+        </ul>
+      </div>
+    <% end %>
+
+    <!-- Images (JSON) -->
+    <%
+      images = begin
+        @product.images.present? ? JSON.parse(@product.images) : []
+      rescue JSON::ParserError, TypeError
+        []
+      end
+    %>
+    <% if images.any? %>
+      <div class="bg-white shadow rounded-lg px-6 py-5">
+        <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Images</h2>
+        <div class="flex flex-wrap gap-3">
+          <% images.first(6).each do |img| %>
+            <% url = img.is_a?(Hash) ? (img['url'] || img['src'] || img['hiRes'] || img['large']) : img %>
+            <% if url.present? %>
+              <img src="<%= url %>" alt="Product image" class="w-24 h-24 object-contain border border-gray-200 rounded" loading="lazy">
+            <% end %>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="space-y-6">
+    <div class="bg-white shadow rounded-lg px-6 py-5">
+      <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Details</h2>
+      <dl class="space-y-2 text-sm">
+        <div class="flex justify-between">
+          <dt class="text-gray-500">Created</dt>
+          <dd class="text-gray-700"><%= format_date(@product.created_at) %></dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-gray-500">Updated</dt>
+          <dd class="text-gray-700"><%= format_date(@product.updated_at) %></dd>
+        </div>
+        <% if @product.shopify_product_id.present? %>
+          <div class="flex justify-between">
+            <dt class="text-gray-500">Shopify ID</dt>
+            <dd class="font-mono text-xs text-gray-700"><%= @product.shopify_product_id %></dd>
+          </div>
+        <% end %>
+        <% if @product.shopify_synced_at.present? %>
+          <div class="flex justify-between">
+            <dt class="text-gray-500">Shopify Synced</dt>
+            <dd class="text-gray-700"><%= format_date(@product.shopify_synced_at) %></dd>
+          </div>
+        <% end %>
+      </dl>
+    </div>
+
+    <div class="bg-white shadow rounded-lg px-6 py-5">
+      <%= link_to "Back to Products", products_path, class: "text-sm text-blue-600 hover:text-blue-500" %>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,61 @@
+# Data Collection
+amazon_bsr_collector:
+  class: AmazonBsrCollectorJob
+  schedule: every day at 2am
+
+movers_shakers_collector:
+  class: MoversShakersCollectorJob
+  schedule: every day at 4am
+
+google_trends_collector:
+  class: GoogleTrendsCollectorJob
+  schedule: every monday at 3am
+
+social_signal_collector:
+  class: SocialSignalCollectorJob
+  schedule: every wednesday at 3am
+
+competitor_monitor:
+  class: CompetitorMonitorJob
+  schedule: every friday at 3am
+
+# M5: Analysis
+category_analyzer:
+  class: CategoryAnalyzerJob
+  schedule: every day at 6am
+
+weekly_recommendation_digest:
+  class: WeeklyRecommendationDigestJob
+  schedule: every monday at 9am
+
+# M6: Sync
+daily_price_sync:
+  class: DailyPriceSyncJob
+  schedule: every day at 8am
+
+weekly_title_sync:
+  class: WeeklyTitleSyncJob
+  schedule: every sunday at 2am
+
+monthly_image_sync:
+  class: MonthlyImageSyncJob
+  schedule: "0 2 1 * *"
+
+# M7: Shopify Sync
+shopify_price_sync:
+  class: ShopifyPriceSyncJob
+  schedule: every day at 10am
+
+# Maintenance & Infrastructure
+stale_state_cleanup:
+  class: StaleStateCleanupJob
+  schedule: "30 * * * *"
+
+scraper_health_check:
+  class: ScraperHealthCheckJob
+  schedule: "*/15 * * * *"
+
+production:
+  clear_solid_queue_finished_jobs:
+    command: "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)"
+    schedule: every hour at minute 12
