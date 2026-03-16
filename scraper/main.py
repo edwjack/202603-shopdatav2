@@ -1,6 +1,6 @@
 """Amazon Product Scraper Microservice.
 
-FastAPI service on port 3171 that scrapes Amazon product detail pages
+FastAPI service on port 3211 that scrapes Amazon product detail pages
 using Scrapling (with fallback to httpx) for full product data collection.
 
 Architecture (v3):
@@ -398,5 +398,5 @@ async def resync_price(req: ResyncRequest, background_tasks: BackgroundTasks):
 if __name__ == "__main__":
     import uvicorn
 
-    port = int(os.environ.get("SCRAPER_PORT", "3171"))
+    port = int(os.environ.get("SCRAPER_PORT", "3211"))
     uvicorn.run(app, host="127.0.0.1", port=port)

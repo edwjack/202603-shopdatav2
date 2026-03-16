@@ -6,7 +6,7 @@ development:
   primary:
     <<: *default
     database: JK26aiAppCT_HIGH
-    username: PROJ2SHOPDT
+    username: PROJ3SHDV2
     password: <%= ENV["ORACLE_PASSWORD"] %>
   queue:
     adapter: sqlite3
@@ -25,7 +25,7 @@ test:
   primary:
     <<: *default
     database: JK26aiAppCT_LOW
-    username: PROJ2SHOPDT
+    username: PROJ3SHDV2
     password: <%= ENV["ORACLE_PASSWORD"] %>
   queue:
     adapter: sqlite3
@@ -44,7 +44,7 @@ production:
   primary:
     <<: *default
     database: JK26aiAppCT_HIGH
-    username: PROJ2SHOPDT
+    username: PROJ3SHDV2
     password: <%= ENV["ORACLE_PASSWORD"] %>
   queue:
     adapter: sqlite3

@@ -1,4 +1,4 @@
-web: bin/rails server -p 3170
+web: bin/rails server -p 3210
 css: bin/rails tailwindcss:watch
 jobs: bin/jobs
-scraper: cd scraper && python3 -m uvicorn main:app --host 127.0.0.1 --port 3171 --reload
+scraper: cd scraper && python3 -m uvicorn main:app --host 127.0.0.1 --port 3211 --reload

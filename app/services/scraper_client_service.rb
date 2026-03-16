@@ -1,7 +1,7 @@
 require 'net/http'
 
 class ScraperClientService
-  SCRAPER_URL = "http://127.0.0.1:#{ENV.fetch('SCRAPER_PORT', '3171')}".freeze
+  SCRAPER_URL = "http://127.0.0.1:#{ENV.fetch('SCRAPER_PORT', '3211')}".freeze
   POLL_INTERVAL = 10 # seconds
   TIMEOUT = ENV.fetch('SCRAPER_TIMEOUT_SECONDS', '1800').to_i # 30 min default
 
