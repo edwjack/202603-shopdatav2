@@ -17,7 +17,6 @@ class CreateRecommendations < ActiveRecord::Migration[8.0]
       t.timestamps
     end
     add_index :recommendations, :status
-    add_index :recommendations, :category_id
 
     execute "ALTER TABLE recommendations ADD insight_vector VECTOR(768, FLOAT32)"
   end

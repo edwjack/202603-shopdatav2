@@ -25,7 +25,6 @@ class CreateProducts < ActiveRecord::Migration[8.0]
       t.timestamps
     end
     add_index :products, :asin, unique: true
-    add_index :products, :category_id
     add_index :products, :sourcing_status
     add_index :products, :scraper_status
     add_index :products, :shopify_status
