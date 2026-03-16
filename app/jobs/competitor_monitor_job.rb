@@ -1,7 +1,7 @@
 class CompetitorMonitorJob < ApplicationJob
   queue_as :scraping
 
-  def perform
+  def perform(category_id = nil)
     start_time = Time.current
     attempted = 0
     succeeded = 0
@@ -15,7 +15,8 @@ class CompetitorMonitorJob < ApplicationJob
         attempted: 0,
         succeeded: 0,
         failed: 1,
-        success_rate: 0.0
+        success_rate: 0.0,
+        trigger_type: category_id ? 'on_demand' : 'scheduled'
       )
       return
     end
@@ -37,14 +38,29 @@ class CompetitorMonitorJob < ApplicationJob
     end
 
     unless aggregated.blank?
-      # Write aggregated competitor data to each active category's today snapshot
-      Category.tracking.active.each do |category|
-        snapshot = CategorySnapshot.find_or_initialize_by(
-          category: category,
-          snapshot_date: Date.current
-        )
-        snapshot.competitor_data = aggregated.to_json
-        snapshot.save!
+      # Write aggregated competitor data to the target category or all active categories
+      target_categories = if category_id
+        [Category.find(category_id)]
+      else
+        Category.tracking.active.to_a
+      end
+
+      target_categories.each do |category|
+        # Concurrent execution guard
+        guard_key = "competitor_collecting_#{category.id}"
+        next if Rails.cache.read(guard_key)
+        Rails.cache.write(guard_key, true, expires_in: 30.minutes)
+
+        begin
+          snapshot = CategorySnapshot.find_or_initialize_by(
+            category: category,
+            snapshot_date: Date.current
+          )
+          snapshot.competitor_data = aggregated.to_json
+          snapshot.save!
+        ensure
+          Rails.cache.delete(guard_key)
+        end
       end
     end
 
@@ -56,7 +72,8 @@ class CompetitorMonitorJob < ApplicationJob
       succeeded: succeeded,
       failed: failed,
       success_rate: attempted > 0 ? (succeeded.to_f / attempted * 100).round(2) : nil,
-      avg_response_ms: avg_ms
+      avg_response_ms: avg_ms,
+      trigger_type: category_id ? 'on_demand' : 'scheduled'
     )
   end
 end

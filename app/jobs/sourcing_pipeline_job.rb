@@ -14,7 +14,16 @@ class SourcingPipelineJob < ApplicationJob
     category.update!(status: 'sourcing')
 
     run_phase(category, 'url_list') { UrlListService.collect(category) }
-    run_phase(category, 'scrapling_collect') { ScraperClientService.collect_category(category) }
+    run_phase(category, 'scrapling_collect') do
+      pending_count = category.asin_urls.pending.count
+      if pending_count > ChunkedSourcingService::CHUNK_SIZE
+        Rails.logger.info "[SourcingPipelineJob] #{pending_count} pending ASINs → ChunkedSourcingService"
+        result = ChunkedSourcingService.process(category)
+        { processed_count: result[:completed_chunks] * ChunkedSourcingService::CHUNK_SIZE, total: result[:total_asins] }
+      else
+        ScraperClientService.collect_category(category)
+      end
+    end
     run_phase(category, 'filter') { ProductFilterService.filter(category) }
     run_phase(category, 'final_filter') { FinalFilterService.filter(category) }
 

@@ -5,7 +5,7 @@ Parses the Movers & Shakers grid: title, ASIN, BSR change %, price.
 """
 import re
 from typing import Optional
-from selectolax.parser import HTMLParser
+from scrapling.parser import Selector
 
 
 def parse_movers(html: str) -> list[dict]:
@@ -17,7 +17,7 @@ def parse_movers(html: str) -> list[dict]:
     Returns:
         List of dicts with keys: asin, title, bsr_change_pct, price.
     """
-    tree = HTMLParser(html)
+    tree = Selector(html)
     movers = []
 
     # Movers & Shakers uses similar grid to Best Sellers
@@ -27,7 +27,7 @@ def parse_movers(html: str) -> list[dict]:
 
     seen_asins = set()
     for item in items:
-        asin = item.attributes.get('data-asin', '').strip()
+        asin = item.attrib.get('data-asin', '').strip()
         if not asin or asin in seen_asins:
             continue
         seen_asins.add(asin)
@@ -49,8 +49,8 @@ def parse_movers(html: str) -> list[dict]:
 def _text(node, selector: str) -> str:
     """Extract stripped text from first matching CSS selector within node."""
     try:
-        el = node.css_first(selector)
-        return el.text(strip=True) if el else ''
+        el = node.css(selector).first
+        return el.text.strip() if el else ''
     except Exception:
         return ''
 
@@ -69,9 +69,9 @@ def _parse_bsr_change(item) -> Optional[float]:
         '.a-color-price',
     ]
     for sel in selectors:
-        el = item.css_first(sel)
+        el = item.css(sel).first
         if el:
-            text = el.text(strip=True)
+            text = el.text.strip()
             # Look for percentage pattern like "1,234%"
             match = re.search(r'([\d,]+)%', text)
             if match:
@@ -88,9 +88,9 @@ def _parse_bsr_change(item) -> Optional[float]:
 
 def _parse_price(item) -> float:
     """Parse price from mover item node."""
-    price_el = item.css_first('.a-price .a-offscreen, ._cDEzb_p13n-sc-price_3mJ9Z')
+    price_el = item.css('.a-price .a-offscreen, ._cDEzb_p13n-sc-price_3mJ9Z').first
     if price_el:
-        text = price_el.text(strip=True).replace(',', '')
+        text = price_el.text.strip().replace(',', '')
         match = re.search(r'[\d.]+', text)
         if match:
             try:

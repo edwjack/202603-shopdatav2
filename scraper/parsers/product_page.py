@@ -45,8 +45,8 @@ def parse_product_page(page, asin: str) -> dict:
 def _text(page, selector: str) -> str:
     """Safely extract text from first matching CSS selector."""
     try:
-        el = page.css_first(selector)
-        return el.text(strip=True) if el else ''
+        el = page.css(selector).first
+        return el.text.strip() if el else ''
     except Exception:
         return ''
 
@@ -114,7 +114,7 @@ def _parse_about_this(page) -> list:
     try:
         bullets = page.css('#feature-bullets li span.a-list-item')
         for bullet in (bullets or []):
-            text = bullet.text(strip=True) if bullet else ''
+            text = bullet.text.strip() if bullet else ''
             if text and not text.startswith('Make sure') and len(text) > 5:
                 items.append(text)
     except Exception:

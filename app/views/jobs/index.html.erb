@@ -1,106 +1,70 @@
 <% content_for :page_title, "Collector Jobs" %>
 
 <div class="space-y-8">
-  <!-- Data Collectors (M4) -->
-  <div class="bg-white shadow rounded-lg overflow-hidden">
-    <div class="px-6 py-4 border-b border-gray-200">
-      <h2 class="text-lg font-semibold text-gray-900">Data Collectors</h2>
-    </div>
-    <table class="min-w-full divide-y divide-gray-200">
-      <thead class="bg-gray-50">
-        <tr>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Collector</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Schedule</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-        </tr>
-      </thead>
-      <tbody class="bg-white divide-y divide-gray-200">
-        <% @collectors.each do |collector| %>
-          <tr>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900"><%= collector[:name] %></td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><%= collector[:schedule] %></td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm">
-              <%= button_to "Run Now",
-                    run_jobs_path,
-                    params: { job_class: collector[:job_class] },
-                    method: :post,
-                    class: "inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500",
-                    data: { turbo_confirm: "Enqueue #{collector[:name]}?" } %>
-            </td>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
-  </div>
 
-  <!-- AI Analysis (M5) -->
+  <!-- Data Collection -->
   <div class="bg-white shadow rounded-lg overflow-hidden">
-    <div class="px-6 py-4 border-b border-gray-200">
-      <h2 class="text-lg font-semibold text-gray-900">AI Analysis</h2>
+    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <h2 class="text-lg font-semibold text-gray-900">Data Collection</h2>
+      <span class="text-xs text-gray-400">On-demand — no schedule</span>
     </div>
     <table class="min-w-full divide-y divide-gray-200">
       <thead class="bg-gray-50">
         <tr>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Schedule</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">Collector</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Run</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
         </tr>
       </thead>
       <tbody class="bg-white divide-y divide-gray-200">
-        <% @ai_jobs.each do |job| %>
-          <tr>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900"><%= job[:name] %></td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><%= job[:schedule] %></td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm">
-              <%= button_to "Run Now",
-                    run_jobs_path,
-                    params: { job_class: job[:job_class] },
-                    method: :post,
-                    class: "inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500",
-                    data: { turbo_confirm: "Enqueue #{job[:name]}?" } %>
+        <% @collection_jobs.each do |job| %>
+          <tr data-controller="job-runner"
+              data-job-runner-job-class-value="<%= job[:job_class] %>"
+              data-job-runner-url-value="<%= run_jobs_path %>">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+              <%= job[:name] %>
             </td>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- Sourcing Pipeline (M6) -->
-  <div class="bg-white shadow rounded-lg overflow-hidden">
-    <div class="px-6 py-4 border-b border-gray-200">
-      <h2 class="text-lg font-semibold text-gray-900">Sourcing Pipeline</h2>
-    </div>
-    <table class="min-w-full divide-y divide-gray-200">
-      <thead class="bg-gray-50">
-        <tr>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Schedule</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-        </tr>
-      </thead>
-      <tbody class="bg-white divide-y divide-gray-200">
-        <% @sourcing_jobs.each do |job| %>
-          <tr>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900"><%= job[:name] %></td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><%= job[:schedule] %></td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm">
-              <% if job[:needs_category] %>
-                <%= form_with url: run_jobs_path, method: :post, class: "inline-flex items-center gap-2", data: { turbo_confirm: "Run Sourcing Pipeline?" } do |f| %>
-                  <%= f.hidden_field :job_class, value: job[:job_class] %>
-                  <%= f.select :category_id, @categories.map { |c| [c.name, c.id] },
-                        { prompt: "Select category..." },
-                        class: "rounded-md border-gray-300 text-sm py-1.5 pr-8" %>
-                  <%= f.submit "Run Now",
-                        class: "inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer" %>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <% if job[:last_at_key] %>
+                <%
+                  last_times = @categories.map { |c| c.send(job[:last_at_key]) rescue nil }.compact
+                  last_at = last_times.max
+                %>
+                <% if last_at %>
+                  <span title="<%= last_at.strftime('%Y-%m-%d %H:%M') %>">
+                    Last: <%= time_ago_in_words(last_at) %> ago
+                  </span>
+                <% else %>
+                  <span class="text-gray-400">Never</span>
                 <% end %>
               <% else %>
-                <%= button_to "Run Now",
-                      run_jobs_path,
-                      params: { job_class: job[:job_class] },
-                      method: :post,
-                      class: "inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500",
-                      data: { turbo_confirm: "Enqueue #{job[:name]}?" } %>
+                <span class="text-gray-400">—</span>
               <% end %>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+              <div class="flex items-center gap-2 flex-wrap">
+                <!-- Run All button -->
+                <button type="button"
+                        data-action="click->job-runner#runAll"
+                        class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500">
+                  Run All
+                </button>
+                <!-- Category dropdown + Run button -->
+                <select data-job-runner-target="categorySelect"
+                        data-action="change->job-runner#categoryChanged"
+                        class="rounded-md border-gray-300 text-xs py-1.5 pr-8 max-w-xs">
+                  <option value="">All categories</option>
+                  <% @categories.each do |category| %>
+                    <option value="<%= category.id %>"><%= category.name %></option>
+                  <% end %>
+                </select>
+                <button type="button"
+                        data-job-runner-target="runButton"
+                        data-action="click->job-runner#run"
+                        class="inline-flex items-center rounded-md bg-gray-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-500">
+                  Run
+                </button>
+              </div>
             </td>
           </tr>
         <% end %>
@@ -108,31 +72,107 @@
     </table>
   </div>
 
-  <!-- Sync Jobs (M6) -->
+  <!-- Analysis -->
   <div class="bg-white shadow rounded-lg overflow-hidden">
-    <div class="px-6 py-4 border-b border-gray-200">
-      <h2 class="text-lg font-semibold text-gray-900">Sync Jobs</h2>
+    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <h2 class="text-lg font-semibold text-gray-900">Analysis</h2>
+      <span class="text-xs text-gray-400">On-demand — no schedule</span>
     </div>
     <table class="min-w-full divide-y divide-gray-200">
       <thead class="bg-gray-50">
         <tr>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Schedule</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">Job</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Info</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        <% @analysis_jobs.each do |job| %>
+          <tr data-controller="job-runner"
+              data-job-runner-job-class-value="<%= job[:job_class] %>"
+              data-job-runner-url-value="<%= run_jobs_path %>">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+              <%= job[:name] %>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <span class="text-gray-400">—</span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+              <div class="flex items-center gap-2 flex-wrap">
+                <button type="button"
+                        data-action="click->job-runner#runAll"
+                        class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500">
+                  Run All
+                </button>
+                <select data-job-runner-target="categorySelect"
+                        data-action="change->job-runner#categoryChanged"
+                        class="rounded-md border-gray-300 text-xs py-1.5 pr-8 max-w-xs">
+                  <option value="">All categories</option>
+                  <% @categories.each do |category| %>
+                    <option value="<%= category.id %>"><%= category.name %></option>
+                  <% end %>
+                </select>
+                <button type="button"
+                        data-job-runner-target="runButton"
+                        data-action="click->job-runner#run"
+                        class="inline-flex items-center rounded-md bg-gray-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-500">
+                  Run
+                </button>
+              </div>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Sync -->
+  <div class="bg-white shadow rounded-lg overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <h2 class="text-lg font-semibold text-gray-900">Sync</h2>
+      <span class="text-xs text-gray-400">On-demand — no schedule</span>
+    </div>
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">Job</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Info</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
         </tr>
       </thead>
       <tbody class="bg-white divide-y divide-gray-200">
         <% @sync_jobs.each do |job| %>
-          <tr>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900"><%= job[:name] %></td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><%= job[:schedule] %></td>
+          <tr data-controller="job-runner"
+              data-job-runner-job-class-value="<%= job[:job_class] %>"
+              data-job-runner-url-value="<%= run_jobs_path %>">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+              <%= job[:name] %>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <span class="text-gray-400">—</span>
+            </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm">
-              <%= button_to "Run Now",
-                    run_jobs_path,
-                    params: { job_class: job[:job_class] },
-                    method: :post,
-                    class: "inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500",
-                    data: { turbo_confirm: "Enqueue #{job[:name]}?" } %>
+              <div class="flex items-center gap-2 flex-wrap">
+                <button type="button"
+                        data-action="click->job-runner#runAll"
+                        class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500">
+                  Run All
+                </button>
+                <select data-job-runner-target="categorySelect"
+                        data-action="change->job-runner#categoryChanged"
+                        class="rounded-md border-gray-300 text-xs py-1.5 pr-8 max-w-xs">
+                  <option value="">All categories</option>
+                  <% @categories.each do |category| %>
+                    <option value="<%= category.id %>"><%= category.name %></option>
+                  <% end %>
+                </select>
+                <button type="button"
+                        data-job-runner-target="runButton"
+                        data-action="click->job-runner#run"
+                        class="inline-flex items-center rounded-md bg-gray-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-500">
+                  Run
+                </button>
+              </div>
             </td>
           </tr>
         <% end %>
@@ -140,31 +180,47 @@
     </table>
   </div>
 
-  <!-- Shopify Sync (M7) -->
+  <!-- Infrastructure / Sourcing -->
   <div class="bg-white shadow rounded-lg overflow-hidden">
     <div class="px-6 py-4 border-b border-gray-200">
-      <h2 class="text-lg font-semibold text-gray-900">Shopify Sync</h2>
+      <h2 class="text-lg font-semibold text-gray-900">Infrastructure</h2>
     </div>
     <table class="min-w-full divide-y divide-gray-200">
       <thead class="bg-gray-50">
         <tr>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Schedule</th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">Job</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Info</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
         </tr>
       </thead>
       <tbody class="bg-white divide-y divide-gray-200">
-        <% @shopify_jobs.each do |job| %>
-          <tr>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900"><%= job[:name] %></td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><%= job[:schedule] %></td>
+        <% @sourcing_jobs.each do |job| %>
+          <tr data-controller="job-runner"
+              data-job-runner-job-class-value="<%= job[:job_class] %>"
+              data-job-runner-url-value="<%= run_jobs_path %>">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+              <%= job[:name] %>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <span class="text-gray-400">Requires category</span>
+            </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm">
-              <%= button_to "Run Now",
-                    run_jobs_path,
-                    params: { job_class: job[:job_class] },
-                    method: :post,
-                    class: "inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500",
-                    data: { turbo_confirm: "Enqueue #{job[:name]}?" } %>
+              <div class="flex items-center gap-2 flex-wrap">
+                <select data-job-runner-target="categorySelect"
+                        data-action="change->job-runner#categoryChanged"
+                        class="rounded-md border-gray-300 text-xs py-1.5 pr-8 max-w-xs">
+                  <option value="">Select category...</option>
+                  <% @categories.each do |category| %>
+                    <option value="<%= category.id %>"><%= category.name %></option>
+                  <% end %>
+                </select>
+                <button type="button"
+                        data-job-runner-target="runButton"
+                        data-action="click->job-runner#run"
+                        class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500">
+                  Run
+                </button>
+              </div>
             </td>
           </tr>
         <% end %>
@@ -172,7 +228,7 @@
     </table>
   </div>
 
-  <!-- Recent jobs table -->
+  <!-- Recent Job Executions -->
   <div class="bg-white shadow rounded-lg overflow-hidden">
     <div class="px-6 py-4 border-b border-gray-200">
       <h2 class="text-lg font-semibold text-gray-900">Recent Job Executions</h2>
@@ -214,4 +270,5 @@
       <div class="px-6 py-8 text-center text-sm text-gray-500">No recent job executions.</div>
     <% end %>
   </div>
+
 </div>

@@ -1,10 +1,11 @@
 class WeeklyRecommendationDigestJob < ApplicationJob
   queue_as :default
 
-  def perform
+  def perform(category_id = nil)
     year_week = CategoryAnalysisService.current_year_week
-    recs = Recommendation.where(week_number: year_week)
-                         .includes(:category).order(score: :desc)
+    scope = Recommendation.where(week_number: year_week).includes(:category)
+    scope = scope.where(category_id: category_id) if category_id
+    recs = scope.order(score: :desc)
     digest = {
       year_week: year_week, year: Date.current.year,
       total: recs.count, pending: recs.pending.count, approved: recs.approved.count,

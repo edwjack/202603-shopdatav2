@@ -1,7 +1,6 @@
-scrapling[fetchers]
-fastapi
+scrapling[fetchers]==0.4.2
+fastapi>=0.100.0
 uvicorn[standard]
 httpx[http2]
-selectolax
 pytrends
 praw

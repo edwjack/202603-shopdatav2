@@ -1,7 +1,7 @@
 """Parse Amazon product quantity/availability from detail page HTML."""
 import re
 
-from selectolax.parser import HTMLParser
+from scrapling.parser import Selector
 
 
 def parse_quantity(html: str) -> int:
@@ -9,12 +9,12 @@ def parse_quantity(html: str) -> int:
 
     Returns estimated quantity. 0 means out of stock.
     """
-    tree = HTMLParser(html)
+    tree = Selector(html)
 
     # Check availability text
-    avail = tree.css_first("#availability")
+    avail = tree.css("#availability").first
     if avail:
-        text = avail.text(strip=True).lower()
+        text = avail.text.strip().lower() if avail else ''
         if "currently unavailable" in text or "out of stock" in text:
             return 0
         if "in stock" in text:
@@ -25,17 +25,17 @@ def parse_quantity(html: str) -> int:
             return 100  # "In Stock" without count = assume plenty
 
     # Check quantity dropdown
-    qty_select = tree.css_first("#quantity select, #quantityDropdownContainer select")
+    qty_select = tree.css("#quantity select, #quantityDropdownContainer select").first
     if qty_select:
         options = qty_select.css("option")
         if options:
             try:
-                return max(int(opt.attributes.get("value", "0")) for opt in options)
+                return max(int(opt.attrib.get("value", "0")) for opt in options)
             except (ValueError, TypeError):
                 pass
 
     # Check add-to-cart button existence
-    add_to_cart = tree.css_first("#add-to-cart-button")
+    add_to_cart = tree.css("#add-to-cart-button").first
     if add_to_cart:
         return 50  # Has add to cart = in stock
 
