@@ -4,3 +4,4 @@ uvicorn[standard]
 httpx[http2]
 pytrends
 praw
+psutil

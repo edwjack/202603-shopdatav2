@@ -59,3 +59,11 @@ scraper/.venv/
 *.dbf
 *.dmp
 config/oracle_wallet/
+
+# Scraper data (benchmarks, checkpoints, fallbacks)
+scraper/data/
+# Scraper temp/debug scripts
+scraper/_*.py
+# Python cache
+scraper/__pycache__/
+scraper/parsers/__pycache__/

@@ -1,8 +1,8 @@
-# Progress Tracking - shopdata
+# Progress Tracking - shopdatav2
 
-**Project**: 202602-shopdata
+**Project**: 202603-shopdatav2
 **Created**: 2026-02-21
-**Last Updated**: 2026-03-10
+**Last Updated**: 2026-04-07
 
 ---
 
@@ -17,11 +17,79 @@
 | M5 AI Analysis | COMPLETE | 2026-02-23 | CategoryAnalyzerJob, WeeklyRecommendationDigestJob, ClaudeApiService, VectorSearchService |
 | M6 Sourcing Pipeline | COMPLETE | 2026-02-23 | 5-phase pipeline, 6 services, 4 jobs, 3 sync schedules, 61 tests |
 | M7 Scrapling+Shopify | COMPLETE | 2026-03-10 | 4-phase pipeline, Shopify GraphQL, 3 Shopify services, 82 tests/206 assertions |
-| **M8 Polish** | **COMPLETE** | 2026-03-10 | Dead code cleanup, validations, dashboard enhancement, pagination, UX polish |
+| M8 Polish | COMPLETE | 2026-03-10 | Dead code cleanup, validations, dashboard enhancement, pagination, UX polish |
+| **M9 50K Scale** | **IN PROGRESS** | 2026-04-07 | 3-channel proxy, WorkerPool, checkpoint/resume, adaptive rate limiting, Shopify mapper |
 
 **Test Suite**: 88 runs, 219 assertions, 0 failures, 0 errors
 **Brakeman**: 0 warnings
-**Routes**: 30
+**Routes**: 31
+
+---
+
+## M9 50K Scale Architecture (2026-04-07)
+
+### What was built
+- **3-channel proxy system** (DIRECT/DECODO/SMARTPROXY) with configurable ratio (5:2.5:2.5)
+- **WorkerPool** with N concurrent browser sessions + stealth profiles (viewport/locale/timezone/UA)
+- **AdaptiveRateLimiter** per-channel delay adjustment (success→speedup, block→slowdown)
+- **CheckpointManager** SQLite-based cross-day resume via batch_id correlation
+- **BatchResultBuffer** accumulates results, pushes to Rails in batches of 50
+- **MemoryWatchdog** RSS monitoring with drain-restart on threshold
+- **DailyQuotaManager** 5K/day cap + Solid Queue cron trigger
+- **Rails batch_upsert** token-authenticated bulk product endpoint
+- **ShopifyMapper** transforms scraped data to Shopify Admin API format
+- **Benchmark tool** 3-channel performance comparison with Shopify export
+
+### New files (12)
+```
+scraper/proxy_rotator.py        scraper/worker_pool.py
+scraper/rate_limiter.py         scraper/result_buffer.py
+scraper/checkpoint.py           scraper/shopify_mapper.py
+scraper/memory_watchdog.py      scraper/benchmark.py
+app/controllers/api/products_controller.rb
+app/jobs/scrape_batch_job.rb
+app/services/daily_quota_manager.rb
+```
+
+### Modified files (8)
+```
+scraper/main.py (v4→v5)        scraper/config.py (3-channel vars)
+scraper/session_manager.py     scraper/parsers/product_page.py
+scraper/requirements.txt       config/routes.rb
+config/recurring.yml           app/jobs/sourcing_pipeline_job.rb
+.gitignore
+```
+
+### New API Endpoints
+```
+POST /scrape/batch              GET  /checkpoint/{id}/remaining
+PUT  /config/proxy-ratio        PUT  /config/batch-size
+GET  /config/proxy-status       POST /api/products/batch_upsert
+```
+
+### Benchmark results (DIRECT channel, 10 non-gated products)
+- Success: 10/10 (100%), 0 blocks
+- Throughput: 141/hr, avg 7.2s/request
+- Data quality: Title 90%, Price 90%, Brand 90%, Image 90%
+
+### Code review fixes applied
+- P0: SQLite threading.Lock on all CheckpointManager operations
+- P0: palette_counter race condition (moved to per-worker state)
+- P0: Auth bypass when SCRAPER_API_TOKEN unset
+- P1: ASIN regex validation before URL interpolation
+- P1: JSON key mismatch in DailyQuotaManager (asins→remaining_asins)
+- P1: CheckpointManager.close() in lifespan teardown
+
+### Known issues
+- Geo-redirect: OCI Asia IP → some ASINs redirect to amazon.sg (US proxy resolves)
+- Overview parser: spec table name/value empty (parser improvement needed)
+- Price $0 on "See all buying options" products (rare in $30-80 range)
+
+### TODO
+- [ ] Configure DECODO_PROXY_URL and SMARTPROXY_URL for multi-channel testing
+- [ ] Overview parser improvement (spec table extraction)
+- [ ] 50-ASIN full benchmark with all 3 channels
+- [ ] Unit tests for new modules (35 tests planned)
 
 ---
 

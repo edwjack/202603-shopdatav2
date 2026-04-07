@@ -2,8 +2,16 @@ class SourcingPipelineJob < ApplicationJob
   queue_as :default
   discard_on ActiveRecord::RecordNotFound
 
-  def perform(category_id)
-    category = Category.find(category_id)
+  def perform(category_id_or_opts)
+    # Support phase: bulk_scrape call from recurring schedule
+    if category_id_or_opts.is_a?(Hash) && category_id_or_opts["phase"] == "bulk_scrape"
+      SourcingBatch.where(status: %w[pending in_progress]).find_each do |batch|
+        DailyQuotaManager.run(batch.id)
+      end
+      return
+    end
+
+    category = Category.find(category_id_or_opts)
 
     # Concurrent guard: skip if already sourcing
     if category.status == 'sourcing'

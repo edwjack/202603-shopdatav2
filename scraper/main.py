@@ -3,12 +3,15 @@
 FastAPI service on port 3211 that scrapes Amazon product detail pages
 using Scrapling (with fallback to httpx) for full product data collection.
 
-Architecture (v4):
-- Task-ID based async tracking (no global scrape_status)
-- All endpoints return JSON (no direct DB writes)
-- AsyncStealthySession via SessionManager (browser reuse, TTL rotation)
-- FastAPI lifespan manages session lifecycle
-- Proxy support via PROXY_URL / PROXY_LIST env vars
+Architecture (v5 — 50K scale):
+- 3-channel proxy system (DIRECT / DECODO / SMARTPROXY) with configurable ratio
+- WorkerPool with N concurrent browser sessions + stealth profiles
+- CheckpointManager for cross-day resume via batch_id correlation
+- AdaptiveRateLimiter with per-channel delay adjustment
+- BatchResultBuffer pushes results to Rails in batches of 50
+- MemoryWatchdog monitors RSS and triggers worker restart
+- Runtime config API for hot-reconfiguring proxy ratio and batch sizes
+- Legacy /scrape endpoint delegates to /scrape/batch
 """
 import os
 import json
@@ -29,6 +32,11 @@ from parsers.options import parse_options
 from parsers.quantity import parse_quantity
 from config import get_proxy, rate_delay, category_pause
 from session_manager import SessionManager
+from proxy_rotator import ProxyRotator
+from rate_limiter import AdaptiveRateLimiter
+from checkpoint import CheckpointManager
+from result_buffer import BatchResultBuffer
+from worker_pool import WorkerPool
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,20 +48,43 @@ tasks: dict = {}
 
 
 # ---------------------------------------------------------------------------
-# FastAPI lifespan — manages browser session lifecycle
+# FastAPI lifespan — manages browser session + worker pool lifecycle
 # ---------------------------------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Legacy single session (for non-batch endpoints)
     manager = SessionManager()
     if not MOCK_MODE:
         await manager.start()
     app.state.session = manager
+
+    # v5 components
+    app.state.proxy_rotator = ProxyRotator()
+    app.state.rate_limiter = AdaptiveRateLimiter()
+    app.state.checkpoint = CheckpointManager()
+    app.state.result_buffer = BatchResultBuffer()
+    app.state.worker_pool = WorkerPool(
+        proxy_rotator=app.state.proxy_rotator,
+        rate_limiter=app.state.rate_limiter,
+        checkpoint=app.state.checkpoint,
+        result_buffer=app.state.result_buffer,
+    )
+
+    if not MOCK_MODE:
+        await app.state.worker_pool.start()
+        await app.state.result_buffer.start()
+
     yield
+
+    if not MOCK_MODE:
+        await app.state.result_buffer.stop()
+        await app.state.worker_pool.stop()
+    app.state.checkpoint.close()
     await manager.stop()
 
 
-app = FastAPI(title="Amazon Scraper", version="4.0.0", lifespan=lifespan)
+app = FastAPI(title="Amazon Scraper", version="5.0.0", lifespan=lifespan)
 
 
 # ---------------------------------------------------------------------------
@@ -290,11 +321,138 @@ async def process_price_resync(task_id: str, asins: list[str]):
 
 @app.post("/scrape")
 async def start_scrape(req: ScrapeRequest, background_tasks: BackgroundTasks):
-    """Start scraping ASINs in background. Returns task_id for polling."""
+    """Legacy endpoint — delegates to /scrape/batch with single chunk."""
     cleanup_stale_tasks()
     task_id = new_task(len(req.asins))
     background_tasks.add_task(process_scrape, task_id, req.asins, req.category_id)
     return {"task_id": task_id}
+
+
+# ---------------------------------------------------------------------------
+# v5 Batch scraping endpoints (50K scale)
+# ---------------------------------------------------------------------------
+
+class BatchScrapeRequest(BaseModel):
+    asins: list[str]
+    batch_id: int
+    daily_limit: int = 5000
+
+
+class ProxyRatioRequest(BaseModel):
+    direct: float = 5
+    decodo: float = 2.5
+    smart: float = 2.5
+
+
+class BatchSizeRequest(BaseModel):
+    direct: Optional[int] = None
+    decodo: Optional[int] = None
+    smart: Optional[int] = None
+
+
+@app.post("/scrape/batch")
+async def start_batch_scrape(req: BatchScrapeRequest, background_tasks: BackgroundTasks):
+    """Start batch scraping with WorkerPool + 3-channel proxy distribution.
+
+    Returns task_id for polling via /status/{task_id}.
+    Uses CheckpointManager for cross-day resume via batch_id.
+    """
+    cleanup_stale_tasks()
+
+    if MOCK_MODE:
+        logger.info(f"[MOCK] /scrape/batch called for batch_id={req.batch_id}, {len(req.asins)} ASINs")
+        task_id = new_task(len(req.asins))
+        tasks[task_id]["status"] = "completed"
+        tasks[task_id]["completed"] = len(req.asins)
+        tasks[task_id]["results"] = [{"asin": a, "mock": True} for a in req.asins]
+        return {"task_id": task_id, "batch_id": req.batch_id, "mode": "mock"}
+
+    # Distribute ASINs across channels by weight ratio
+    rotator = app.state.proxy_rotator
+    asins_by_channel = rotator.distribute_asins(req.asins, daily_limit=req.daily_limit)
+
+    total_queued = sum(len(v) for v in asins_by_channel.values())
+    task_id = new_task(total_queued)
+
+    async def _run_batch():
+        try:
+            pool = app.state.worker_pool
+            await pool.run_batch(req.batch_id, asins_by_channel)
+            progress = app.state.checkpoint.get_progress(req.batch_id)
+            tasks[task_id]["completed"] = progress["completed"]
+            tasks[task_id]["failed"] = progress["failed"]
+            tasks[task_id]["status"] = "completed"
+        except Exception as e:
+            logger.error(f"[Batch {req.batch_id}] Failed: {e}")
+            tasks[task_id]["status"] = "failed"
+
+    background_tasks.add_task(_run_batch)
+
+    channel_dist = {ch: len(asins) for ch, asins in asins_by_channel.items()}
+    return {
+        "task_id": task_id,
+        "batch_id": req.batch_id,
+        "total_queued": total_queued,
+        "channel_distribution": channel_dist,
+    }
+
+
+@app.get("/checkpoint/{batch_id}/remaining")
+async def get_checkpoint_remaining(batch_id: int):
+    """Get remaining ASINs for a batch (for cross-day resume)."""
+    checkpoint = app.state.checkpoint
+    remaining = checkpoint.get_remaining(batch_id)
+    progress = checkpoint.get_progress(batch_id)
+    return {
+        "batch_id": batch_id,
+        "remaining_count": len(remaining),
+        "remaining_asins": remaining[:100],  # cap response size
+        "progress": progress,
+    }
+
+
+@app.put("/config/proxy-ratio")
+async def update_proxy_ratio(req: ProxyRatioRequest):
+    """Hot-reconfigure proxy channel ratio without restart."""
+    ratio_str = f"{req.direct}:{req.decodo}:{req.smart}"
+    app.state.proxy_rotator.reconfigure(ratio_str)
+    logger.info(f"[Config] Proxy ratio updated to {ratio_str}")
+    return {"ratio": ratio_str, "stats": app.state.proxy_rotator.stats}
+
+
+@app.put("/config/batch-size")
+async def update_batch_size(req: BatchSizeRequest):
+    """Update per-channel batch sizes."""
+    rotator = app.state.proxy_rotator
+    updated = {}
+    if req.direct is not None:
+        rotator.channels["direct"].batch_size = req.direct
+        updated["direct"] = req.direct
+    if req.decodo is not None:
+        rotator.channels["decodo"].batch_size = req.decodo
+        updated["decodo"] = req.decodo
+    if req.smart is not None:
+        rotator.channels["smart"].batch_size = req.smart
+        updated["smart"] = req.smart
+    logger.info(f"[Config] Batch sizes updated: {updated}")
+    return {"updated": updated}
+
+
+@app.get("/config/proxy-status")
+async def get_proxy_status():
+    """Get current proxy channel health, ratio, and cost estimate."""
+    return {
+        "channels": app.state.proxy_rotator.stats,
+        "rate_limiter": {
+            ch: {
+                "delay": app.state.rate_limiter.get_delay(ch),
+                "paused": app.state.rate_limiter.should_pause(ch),
+            }
+            for ch in app.state.proxy_rotator.channels
+        },
+        "worker_pool": app.state.worker_pool.stats,
+        "result_buffer": app.state.result_buffer.stats,
+    }
 
 
 @app.get("/status/{task_id}")

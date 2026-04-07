@@ -33,12 +33,49 @@ CATEGORY_PAUSE_MAX = float(os.environ.get("CATEGORY_PAUSE_MAX", "300"))  # 5 min
 PROXY_URL = os.environ.get("PROXY_URL")
 PROXY_LIST = [p for p in os.environ.get("PROXY_LIST", "").split(",") if p]
 
+# --- Multi-channel proxy config ---
+PROXY_RATIO = os.environ.get("PROXY_RATIO", "5:2.5:2.5")   # direct:decodo:smart
+DECODO_PROXY_URL = os.environ.get("DECODO_PROXY_URL")
+SMARTPROXY_URL = os.environ.get("SMARTPROXY_URL")
+CHANNEL_BATCH_SIZE = int(os.environ.get("CHANNEL_BATCH_SIZE", "500"))
+DIRECT_BATCH_SIZE = int(os.environ.get("DIRECT_BATCH_SIZE", str(CHANNEL_BATCH_SIZE)))
+DECODO_BATCH_SIZE = int(os.environ.get("DECODO_BATCH_SIZE", str(CHANNEL_BATCH_SIZE)))
+SMART_BATCH_SIZE = int(os.environ.get("SMART_BATCH_SIZE", str(CHANNEL_BATCH_SIZE)))
+
 
 def get_proxy():
     """Return a proxy URL from env config, or None if not configured."""
     if PROXY_LIST:
         return random.choice(PROXY_LIST)
     return PROXY_URL
+
+
+def get_channel_config() -> dict:
+    """Return parsed channel configs keyed by channel name."""
+    raw = PROXY_RATIO.split(":")
+    if len(raw) != 3:
+        raise ValueError(f"PROXY_RATIO must be 'direct:decodo:smart', got: {PROXY_RATIO!r}")
+    direct_w, decodo_w, smart_w = (float(w) for w in raw)
+    return {
+        "direct": {
+            "url": None,
+            "weight": direct_w,
+            "batch_size": DIRECT_BATCH_SIZE,
+            "enabled": True,
+        },
+        "decodo": {
+            "url": DECODO_PROXY_URL,
+            "weight": decodo_w,
+            "batch_size": DECODO_BATCH_SIZE,
+            "enabled": bool(DECODO_PROXY_URL),
+        },
+        "smart": {
+            "url": SMARTPROXY_URL,
+            "weight": smart_w,
+            "batch_size": SMART_BATCH_SIZE,
+            "enabled": bool(SMARTPROXY_URL),
+        },
+    }
 
 
 def rate_delay(source: str) -> float:

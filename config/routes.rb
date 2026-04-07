@@ -26,5 +26,13 @@ Rails.application.routes.draw do
     end
   end
 
+  namespace :api do
+    resources :products, only: [] do
+      collection do
+        post :batch_upsert
+      end
+    end
+  end
+
   get "up" => "rails/health#show", as: :rails_health_check
 end
