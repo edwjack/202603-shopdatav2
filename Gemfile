@@ -75,4 +75,4 @@ end
 gem "dotenv-rails", "~> 3.2"
 
 # Shopify Admin API
-gem "shopify_api", "~> 14.0"
+gem "shopify_api", "~> 16.1"
