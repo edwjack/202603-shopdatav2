@@ -9,6 +9,8 @@
 
 # Ignore all environment files.
 /.env*
+# .env.example is a TEMPLATE — must be tracked. The glob above would catch it.
+!/.env.example
 
 # Ignore all logfiles and tempfiles.
 /log/*
