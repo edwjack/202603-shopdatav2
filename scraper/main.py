@@ -102,7 +102,11 @@ async def lifespan(app: FastAPI):
     app.state.proxy_rotator = app.state.proxy_rotator_obj
     app.state.rate_limiter = AdaptiveRateLimiter()
     app.state.checkpoint = CheckpointManager()
-    app.state.result_buffer = BatchResultBuffer()
+    # Wire the durability callback: result_buffer transitions checkpoint
+    # rows from 'scraped' → 'persisted' only after Rails confirms (F5 fix).
+    app.state.result_buffer = BatchResultBuffer(
+        on_persisted=app.state.checkpoint.mark_persisted,
+    )
     app.state.worker_pool = WorkerPool(
         proxy_rotator=app.state.proxy_rotator,
         rate_limiter=app.state.rate_limiter,

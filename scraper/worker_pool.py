@@ -242,7 +242,13 @@ class WorkerPool:
         await self.result_buffer.flush()
 
         progress = self.checkpoint.get_progress(batch_id)
-        logger.info(f"[WorkerPool] Batch {batch_id} complete: {progress}")
+        # Persist terminal batch state — F7 fix.
+        terminal = "completed" if progress.get("remaining", 0) == 0 else "failed"
+        try:
+            self.checkpoint.set_batch_status(batch_id, terminal)
+        except Exception as e:
+            logger.warning(f"[WorkerPool] set_batch_status failed: {e}")
+        logger.info(f"[WorkerPool] Batch {batch_id} {terminal}: {progress}")
 
     # ------------------------------------------------------------------
     # Worker loop
@@ -338,8 +344,12 @@ class WorkerPool:
             # Record success
             self.rate_limiter.record_success(channel)
             self.proxy_rotator.record_success(channel)
-            self.checkpoint.mark_completed(batch_id, asin, data)
-            await self.result_buffer.add(data)
+            # Two-phase: scraped now (durable in SQLite), persisted only after
+            # Rails confirms the batch (callback in result_buffer). Without
+            # this, a Rails outage would leave fallback files on disk while
+            # SQLite said completed → resume skipped them (F5 bug).
+            self.checkpoint.mark_scraped(batch_id, asin, data)
+            await self.result_buffer.add(data, batch_id=batch_id, asin=asin)
 
             worker.products_scraped += 1
             worker.fetch_count += 1

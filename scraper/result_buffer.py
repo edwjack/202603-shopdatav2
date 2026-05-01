@@ -28,8 +28,12 @@ class BatchResultBuffer:
         flush_interval: float = 30.0,
         rails_endpoint: Optional[str] = None,
         rails_token: Optional[str] = None,
+        on_persisted: Optional[callable] = None,
     ) -> None:
-        self.buffer: list[dict] = []
+        # buffer holds (item_dict, batch_id_or_None, asin_or_None) tuples so
+        # we can callback per-item once Rails confirms — needed for the
+        # checkpoint scraped→persisted transition (F5 fix).
+        self.buffer: list[tuple] = []
         self.batch_size: int = int(os.environ.get("BATCH_RESULT_SIZE", batch_size))
         self.flush_interval: float = float(
             os.environ.get("BATCH_FLUSH_INTERVAL", flush_interval)
@@ -47,18 +51,28 @@ class BatchResultBuffer:
             "last_flush_at": None,
         }
         self._lock = asyncio.Lock()
+        # Callback invoked with (batch_id, asin) per item once Rails confirms.
+        # WorkerPool wires this to checkpoint.mark_persisted.
+        self._on_persisted = on_persisted
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    async def add(self, result: dict) -> None:
-        """Append one result; trigger a flush when the buffer is full."""
+    async def add(self, result: dict, batch_id: Optional[int] = None,
+                  asin: Optional[str] = None) -> None:
+        """Append one result; trigger a flush when the buffer is full.
+        batch_id+asin are remembered so on_persisted callback can fire
+        per-item after Rails confirms (F5 durability fix)."""
+        should_flush = False
         async with self._lock:
-            self.buffer.append(result)
+            self.buffer.append((result, batch_id, asin))
             if len(self.buffer) >= self.batch_size:
-                # Flush inline (still holding the lock so callers wait).
-                await self._do_flush()
+                should_flush = True
+        # Flush outside the lock so other workers can keep adding while
+        # the HTTP roundtrip (up to ~100s w/ retries) runs (H2/F8 fix).
+        if should_flush:
+            await self.flush()
 
     async def start(self) -> None:
         """Start the periodic background flush timer."""
@@ -78,15 +92,20 @@ class BatchResultBuffer:
                 await self._flush_task
             except asyncio.CancelledError:
                 pass
-        async with self._lock:
-            if self.buffer:
-                await self._do_flush()
+        await self.flush()
         logger.info("BatchResultBuffer: stopped. Final stats: %s", self.stats)
 
     async def flush(self) -> None:
-        """Public flush — acquires lock then calls the inner implementation."""
+        """Public flush — swaps buffer under lock, then HTTP I/O outside lock."""
         async with self._lock:
-            await self._do_flush()
+            if not self.buffer:
+                return
+            batch = self.buffer
+            self.buffer = []
+            self._batch_counter += 1
+            counter = self._batch_counter
+        # Lock released. Other workers can now keep adding while we POST.
+        await self._post_batch(batch, counter)
 
     @property
     def stats(self) -> dict:
@@ -102,25 +121,28 @@ class BatchResultBuffer:
     # ------------------------------------------------------------------
 
     async def _periodic_flush(self) -> None:
-        """Runs as a background task; flushes on each interval tick."""
-        while True:
-            await asyncio.sleep(self.flush_interval)
-            async with self._lock:
-                if self.buffer:
-                    await self._do_flush()
+        """Runs as a background task; flushes on each interval tick.
+        Wrapped in try/finally so cancellation is clean (H2 fix)."""
+        try:
+            while True:
+                await asyncio.sleep(self.flush_interval)
+                try:
+                    await self.flush()
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("BatchResultBuffer: periodic flush error — %s", exc)
+        except asyncio.CancelledError:
+            pass
 
-    async def _do_flush(self) -> None:
-        """
-        Core flush logic — called while holding ``self._lock``.
-        Attempts up to 3 times with exponential backoff; writes a local
-        fallback file if all attempts fail.
-        """
-        if not self.buffer:
-            return
-
-        batch = list(self.buffer)
-        self._batch_counter += 1
-        payload = {"products": batch, "batch_id": self._batch_counter}
+    async def _post_batch(self, batch: list, counter: int) -> None:
+        """Send one batch to Rails with retry/backoff. Called outside the
+        producer lock so other workers can keep enqueueing during the HTTP
+        roundtrip (H2/F8 fix). On success, fires on_persisted per item;
+        on failure, writes the fallback file with metadata so the replay
+        tool can resend (F5 durability tail)."""
+        # batch is list[(item, batch_id, asin)] — extract products only for
+        # the wire payload, but keep the metadata for callbacks/fallback.
+        products = [tup[0] for tup in batch]
+        payload = {"products": products, "batch_id": counter}
         headers = {
             "Authorization": f"Bearer {self.rails_token}",
             "Content-Type": "application/json",
@@ -134,53 +156,56 @@ class BatchResultBuffer:
             for attempt, delay in enumerate(delays, start=1):
                 try:
                     response = await client.post(
-                        self.rails_endpoint,
-                        json=payload,
-                        headers=headers,
+                        self.rails_endpoint, json=payload, headers=headers,
                     )
                     if response.is_success:
                         success = True
                         logger.info(
                             "BatchResultBuffer: flushed %d items (attempt %d, status %d)",
-                            len(batch),
-                            attempt,
-                            response.status_code,
+                            len(batch), attempt, response.status_code,
                         )
                         break
-                    else:
-                        last_error = f"HTTP {response.status_code}: {response.text[:200]}"
-                        logger.warning(
-                            "BatchResultBuffer: flush attempt %d failed — %s",
-                            attempt,
-                            last_error,
-                        )
+                    last_error = f"HTTP {response.status_code}: {response.text[:200]}"
+                    logger.warning(
+                        "BatchResultBuffer: flush attempt %d failed — %s",
+                        attempt, last_error,
+                    )
                 except Exception as exc:  # noqa: BLE001
                     last_error = str(exc)
                     logger.warning(
                         "BatchResultBuffer: flush attempt %d exception — %s",
-                        attempt,
-                        last_error,
+                        attempt, last_error,
                     )
-
                 if attempt < len(delays):
                     await asyncio.sleep(delay)
-
-        # Always clear the buffer regardless of outcome.
-        self.buffer.clear()
 
         now_iso = datetime.now(timezone.utc).isoformat()
         if success:
             self._stats["total_sent"] += len(batch)
             self._stats["last_flush_at"] = now_iso
+            # Fire per-item callback so checkpoint can transition to persisted.
+            if self._on_persisted:
+                for _item, b_id, asin in batch:
+                    if b_id is not None and asin:
+                        try:
+                            self._on_persisted(b_id, asin)
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning(
+                                "BatchResultBuffer: on_persisted callback failed for "
+                                "(batch=%s, asin=%s) — %s", b_id, asin, exc,
+                            )
         else:
             self._stats["total_failed"] += len(batch)
             self._stats["last_flush_at"] = now_iso
-            await self._write_fallback(batch, now_iso, last_error)
+            # Fallback file gets the metadata-rich form so replay can hit Rails
+            # AND mark the checkpoint persisted afterward.
+            await self._write_fallback_meta(batch, now_iso, last_error)
 
-    async def _write_fallback(
-        self, batch: list[dict], timestamp: str, reason: Optional[str]
+    async def _write_fallback_meta(
+        self, batch: list[tuple], timestamp: str, reason: Optional[str]
     ) -> None:
-        """Persist a failed batch to disk so no data is lost."""
+        """Persist failed batch with batch_id/asin metadata so the replay tool
+        can resend AND mark the checkpoint persisted on success."""
         safe_ts = timestamp.replace(":", "-").replace("+", "Z")
         fallback_dir = os.path.join(os.path.dirname(__file__), "data")
         os.makedirs(fallback_dir, exist_ok=True)
@@ -189,7 +214,10 @@ class BatchResultBuffer:
             "timestamp": timestamp,
             "reason": reason,
             "count": len(batch),
-            "products": batch,
+            "items": [
+                {"batch_id": b_id, "asin": asin, "product": item}
+                for item, b_id, asin in batch
+            ],
         }
         try:
             with open(path, "w", encoding="utf-8") as fh:
