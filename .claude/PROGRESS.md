@@ -2,7 +2,7 @@
 
 **Project**: 202603-shopdatav2
 **Created**: 2026-02-21
-**Last Updated**: 2026-04-07
+**Last Updated**: 2026-05-01
 
 ---
 
@@ -86,10 +86,21 @@ GET  /config/proxy-status       POST /api/products/batch_upsert
 - Price $0 on "See all buying options" products (rare in $30-80 range)
 
 ### TODO
+- [ ] **P0 — PR1 hot-fix**: rate_limiter.py:11 `from scraper.config` → `from config` (D1 boot 차단)
+- [ ] **P0 — PR2 proxy+auth**: SessionManager 에 proxy/profile 전달 (C1/F1), control endpoint 토큰 인증 (C2/F9/Q1)
+- [ ] **P0 — PR3 durability**: checkpoint 단계적 status (scraped→persisted), retry status='failed' 마킹, fallback replay 도구 (F5/C3/F6/R15)
+- [ ] **P1 — PR4 동시성**: Pydantic Field 제약, batch isolation (F4), flush lock 해제 (H2/F8), ban → redistribute (F3)
+- [ ] **P1 — PR5 Rails**: recursive_sanitize, batch_upsert 입력 검증 (H3/F10/Q5)
+- [ ] **P1 — PR6 DX**: scraper/README.md, .env.example 에 M9 변수 18종, requirements.txt scrapling 핀 정확화 (D2-D4)
+- [ ] **P2 — PR7 monitoring**: /docs OpenAPI 메타 (tags/Field/docstring), /health Rails reachability, /metrics endpoint
 - [ ] Configure DECODO_PROXY_URL and SMARTPROXY_URL for multi-channel testing
 - [ ] Overview parser improvement (spec table extraction)
-- [ ] 50-ASIN full benchmark with all 3 channels
+- [ ] 50-ASIN full benchmark with all 3 channels (Risk R1·R3 — stale benchmark 갱신)
+- [ ] 100-ASIN 24h soak test with DIRECT only — zero-block 가능성 증명 (Risk R3·R7·R13)
+- [ ] Staged load test 1K→5K→10K→50K + checkpoint kill-recovery 시뮬레이션 (Risk R12)
+- [ ] DECODO/SMARTPROXY 견적 → 50K 트래픽 단가 산출 → 이전 유료 tool 비용 breakeven (Risk R11)
 - [ ] Unit tests for new modules (35 tests planned)
+- [ ] Jina fallback adapter (dead-ASIN 200 wrapper 거부 룰 포함, Risk R8)
 
 ---
 
@@ -189,6 +200,31 @@ test/jobs/sync_jobs_test.rb
 ---
 
 ## Session Notes
+
+### 2026-05-01 (Scraper A — 5-skill 통합 리뷰)
+- /review /codex /browse /devex-review /qa 5종 → P0 4건, P1 7건, P2 7건, Risk 15건 도출
+- **CRITICAL**: D1 service boot 불가 (rate_limiter.py:11 잘못된 import) — Procfile.dev 명령으로 즉시 ImportError, 3f24372 commit 이후 라이브 부팅 미검증
+- **CRITICAL**: C1/F1 proxy/profile 가 실제 fetch 에 적용 안 됨 (worker_pool.py:257) — 50K 비용 절감 메커니즘 무력
+- **CRITICAL**: F5 checkpoint 가 Rails 영속화 전에 success 마킹 — flush 실패 시 silent data loss
+- /codex (high reasoning, 600s, 24K tokens) 가 10건 독립 발견 (C1/F1, F2-F10)
+- /qa live mock 모드: 20 테스트 중 10 fail — auth 부재 (Q1), Pydantic Field 부재 (Q2-Q4), nested XSS (Q5)
+- /devex-review TTHW 점수 2.3/10 (운영 불가 상태)
+- Codex Gate 1 (high reasoning) PASS-with-caveats — 5중확인 0/3중1/2중8 일관성
+- Codex Gate 2 (high reasoning) APPROVE
+- 산출물: docs/scraper-multi-review-2026-05-01.md
+- TODO 7-PR plan ~6일 추정, R3/R13 해결을 위한 100-ASIN 24h soak 별도 24h 필요
+
+### 2026-05-01 (Scrape 방식 3-way 비교)
+- 3가지 scrape 방식 (현재 Scrapling / gstack /scrape / Jina Reader) 실측 비교 수행
+- gstack /scrape: N=10 ASIN, 1.6-2.5s/req, 차단 0, 단 OCI Asia → amazon.sg geo-redirect 확인 (가격 SGD 노출)
+- Jina Reader: N=7 ASIN, 1.5-15.4s, 차단 0, US backend (USD 일관), 단 가격 후보 다중·dead-ASIN 200 wrapper
+- Codex Gate 1 (verdict-only, 600s/high → 600s/medium → PROCEED-WITH-CAVEATS), Gate 2 (high → medium → APPROVE)
+- 결정: 50K 본 작업은 A 유지, 단 비용절감 ROI 와 zero-block 검증을 staged 로 진행
+- 단계: 단계 0 prev tool 유지 → 단계 1 100-ASIN 24h soak → 단계 2 staged load test → 단계 3 breakeven cutover
+- B gstack /scrape: production 제외, dev ad-hoc 용도만
+- C Jina Reader: 하이브리드 fallback + 컨텐츠 사이트 단발 추출 후보
+- 13개 Risk 식별, M9 TODO 5건 추가
+- 산출물: docs/scrape-comparison-2026-05-01.md
 
 ### 2026-03-10 (M8 구현)
 - M8 Polish 전체 구현 완료

@@ -1,0 +1,44 @@
+# === Token Saver: Auto-generated ===
+# Safe to edit. Regenerate with: /token-saver ignore
+
+# GStack browser artifacts
+.gstack/
+
+# Build artifacts
+node_modules/
+.next/
+build/
+dist/
+out/
+coverage/
+
+# Binary/media files (Claude cannot meaningfully read these)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
+*.woff
+*.woff2
+*.ttf
+*.eot
+
+# Lock files (large, low signal)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+Gemfile.lock
+
+# Build cache
+*.tsbuildinfo
+
+# Test artifacts
+test-results/
+playwright-report/
+blob-report/
+# Rails-specific
+log/
+tmp/
+storage/
+vendor/bundle/
+# === End Token Saver ===
