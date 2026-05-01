@@ -179,6 +179,44 @@ module Api
       assert_equal 1, body["failed"]
     end
 
+    test "missing :products key returns JSON 400 envelope" do
+      post "/api/products/batch_upsert", params: {}.to_json, headers: @headers
+      assert_response :bad_request
+      body = JSON.parse(response.body)
+      assert_equal "products is required", body["error"]
+    end
+
+    test "non-array :products returns JSON 400 envelope" do
+      post "/api/products/batch_upsert",
+           params: { products: "not_an_array" }.to_json, headers: @headers
+      assert_response :bad_request
+      body = JSON.parse(response.body)
+      assert_match(/array/, body["error"])
+    end
+
+    test "backcompat: pre-serialized JSON string for nested field is parsed not double-encoded" do
+      images_str = '[{"hiRes":"https://m.media-amazon.com/images/I/x.jpg","variant":"MAIN"}]'
+      post "/api/products/batch_upsert",
+           params: { products: [{ asin: "TEST00000A", title: "T", images: images_str }] }.to_json,
+           headers: @headers
+      assert_response :success
+      raw = Product.find_by(asin: "TEST00000A").images
+      parsed = JSON.parse(raw)
+      assert_kind_of Array, parsed
+      assert_equal "MAIN", parsed.first["variant"]
+    end
+
+    test "deep nesting drops subtrees past MAX_NESTED_DEPTH so raw HTML can't be stored" do
+      deep = { "L1" => { "L2" => { "L3" => { "L4" => { "L5" => { "evil" => "<script>x</script>" } } } } } }
+      post "/api/products/batch_upsert",
+           params: { products: [{ asin: "TEST00000B", title: "T", options: deep }] }.to_json,
+           headers: @headers
+      assert_response :success
+      raw = Product.find_by(asin: "TEST00000B").options
+      refute_match(/<script>/, raw)
+      refute_match(/alert/, raw)
+    end
+
     test "deeply nested malicious payload doesn't crash + recurses up to depth limit" do
       deep = { "a" => { "b" => { "c" => { "d" => { "e" => "<script>x</script>" } } } } }
       post "/api/products/batch_upsert",

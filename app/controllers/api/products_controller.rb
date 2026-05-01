@@ -18,7 +18,13 @@ module Api
     NESTED_OBJECT_FIELDS = %i[images overview options].freeze  # array-of-hash or hash
 
     def batch_upsert
-      products_params = params.require(:products)
+      # params[:products] (not require!) so a missing key returns the same
+      # JSON error envelope as a malformed array, instead of Rails' default
+      # ParameterMissing 400 (Gate v2 fix).
+      products_params = params[:products]
+      if products_params.nil?
+        return render json: { error: "products is required" }, status: :bad_request
+      end
       unless products_params.is_a?(Array) || products_params.is_a?(ActionController::Parameters)
         return render json: { error: "products must be an array" }, status: :bad_request
       end
@@ -80,7 +86,24 @@ module Api
 
       (NESTED_ARRAY_FIELDS + NESTED_OBJECT_FIELDS).each do |key|
         next unless hash.key?(key)
-        nested = recursive_sanitize(hash[key])
+        raw = hash[key]
+        # Backcompat (Gate v2 GAP1): if the caller already serialized to a
+        # JSON-string, parse first so we don't double-encode (avoid storing
+        # `"[\"...\"]"` instead of `["..."]`). On parse failure, treat as
+        # an opaque string — sanitize and store raw.
+        if raw.is_a?(String)
+          parsed = begin
+                     JSON.parse(raw)
+                   rescue JSON::ParserError
+                     :__not_json__
+                   end
+          if parsed == :__not_json__
+            out[key] = recursive_sanitize(raw)
+            next
+          end
+          raw = parsed
+        end
+        nested = recursive_sanitize(raw)
         # Product columns are TEXT — serialize. nil stays nil so the column
         # can be cleared explicitly.
         out[key] = nested.nil? ? nil : nested.to_json
@@ -90,31 +113,35 @@ module Api
     end
 
     # Recursively sanitize a value tree:
-    # - String: ActionController::Base.helpers.sanitize, length-capped
-    # - Hash: sanitize values, sanitize string keys
-    # - Array: sanitize each element (length capped to prevent unbounded blow-up)
-    # - depth limit so a malicious payload can't recurse forever
+    # - String: always sanitize + length-cap, even at max depth (Gate v2 GAP2)
+    # - Hash / Array: stop descending past MAX_NESTED_DEPTH and replace the
+    #   subtree with `nil` so deep raw HTML can't be stored unsanitized
+    # - Numeric/Bool: pass through
     def recursive_sanitize(obj, depth: 0)
       return nil if obj.nil?
-      return obj if depth > MAX_NESTED_DEPTH
       case obj
       when String
-        sanitized = ActionController::Base.helpers.sanitize(obj)
-        sanitized = sanitized.to_s
+        # Sanitize at every depth — string content must never be raw HTML
+        # in storage, regardless of nesting level.
+        sanitized = ActionController::Base.helpers.sanitize(obj).to_s
         sanitized.length > MAX_STRING_LENGTH ? sanitized[0, MAX_STRING_LENGTH] : sanitized
+      when Numeric, TrueClass, FalseClass
+        obj
       when Hash, ActionController::Parameters
+        return nil if depth > MAX_NESTED_DEPTH
         h = obj.is_a?(ActionController::Parameters) ? obj.to_unsafe_h : obj
         h.each_with_object({}) do |(k, v), acc|
           key = k.is_a?(String) ? recursive_sanitize(k, depth: depth + 1) : k
           acc[key] = recursive_sanitize(v, depth: depth + 1)
         end
       when Array
+        return nil if depth > MAX_NESTED_DEPTH
         capped = obj.first(MAX_ARRAY_LENGTH)
         capped.map { |v| recursive_sanitize(v, depth: depth + 1) }
-      when Numeric, TrueClass, FalseClass
-        obj
       else
-        obj.to_s
+        # Unknown type — coerce to string and sanitize so nothing slips through.
+        sanitized = ActionController::Base.helpers.sanitize(obj.to_s).to_s
+        sanitized.length > MAX_STRING_LENGTH ? sanitized[0, MAX_STRING_LENGTH] : sanitized
       end
     end
   end
