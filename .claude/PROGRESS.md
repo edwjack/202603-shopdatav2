@@ -91,8 +91,8 @@ GET  /config/proxy-status       POST /api/products/batch_upsert
 - [x] ~~**P0 — PR3 durability**: checkpoint 단계적 status (scraped→persisted), retry status='failed' 마킹, fallback replay 도구 (F5/C3/F6/R15)~~ (8d1c6e0+1965f6e 2026-05-01)
 - [x] ~~**P1 — PR4 동시성**: Pydantic Field 제약, batch isolation (F4), flush lock 해제 (H2/F8), ban → redistribute (F3)~~ (7934ea7 + 231c554 + ec87ddc + ac66916, 2026-05-01) — Pydantic Field 는 PR2 에서 처리, F8/H2 flush lock 은 PR3 에서 처리
 - [x] ~~**P1 — PR5 Rails**: recursive_sanitize, batch_upsert 입력 검증 (H3/F10/Q5)~~ (6537647 + 91d62aa, 2026-05-01)
-- [ ] **P1 — PR6 DX**: scraper/README.md, .env.example 에 M9 변수 18종, requirements.txt scrapling 핀 정확화 (D2-D4)
-- [ ] **P2 — PR7 monitoring**: /docs OpenAPI 메타 (tags/Field/docstring), /health Rails reachability, /metrics endpoint
+- [x] ~~**P1 — PR6 DX**: scraper/README.md, .env.example 에 M9 변수 18종, requirements.txt scrapling 핀 정확화 (D2-D4)~~ (7ef7663 + 36cc34c, 2026-05-01)
+- [x] ~~**P2 — PR7 monitoring**: /docs OpenAPI 메타 (tags/Field/docstring)~~ (f9d50c6, 2026-05-01) — /health Rails reachability + /metrics endpoint 는 별도 후속 PR
 - [ ] Configure DECODO_PROXY_URL and SMARTPROXY_URL for multi-channel testing
 - [ ] Overview parser improvement (spec table extraction)
 - [ ] 50-ASIN full benchmark with all 3 channels (Risk R1·R3 — stale benchmark 갱신)
@@ -200,6 +200,16 @@ test/jobs/sync_jobs_test.rb
 ---
 
 ## Session Notes
+
+### 2026-05-01 (PR6+PR7 — DX + OpenAPI 메타 마무리)
+- 4 commit: 7ef7663 (PR6 README + .env M9 vars + requirements pin), 36cc34c (.gitignore exception), f9d50c6 (PR7 OpenAPI 메타 + Rails truncate warn)
+- D2-D6: scraper/README.md (931 단어), .env.example +17 M9 vars, requirements.txt Py 3.10+ comment
+- P2-1 + R-NEW-10: FastAPI openapi_tags=[5 그룹], 14 endpoint tags+summary+202, BatchScrapeRequest examples, Rails sanitize warn log
+- Codex Gate: PR6 APPROVE 즉시 / PR7 REVISE (misread) → APPROVE
+- 회귀: 18 pass / 0 fail
+- docs/scraper-p2-fixes-2026-05-01.md 작성
+- 최종 누적: audit → P0 (5 commit) → P1 (6 commit) → P2 (4 commit) = 15 commits, 45 pass / 0 fail
+- 잔존 R-CARRY-13 (24h soak) + R-CARRY (Rails ADB cert) 만 환경 의존, 코드 사이드 P0/P1/P2 모두 closed
 
 ### 2026-05-01 (PR4+PR5 — F2/F3/F4 + Rails sanitize)
 - 6 commit: 7934ea7 (PR4 F4+F2+F3), 231c554 (PR4 in-flight requeue), ec87ddc (PR4 position-track), ac66916 (PR4 F2 invariant), 6537647 (PR5 sanitize+JSON), 91d62aa (PR5 backcompat+depth)
