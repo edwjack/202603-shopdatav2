@@ -86,9 +86,9 @@ GET  /config/proxy-status       POST /api/products/batch_upsert
 - Price $0 on "See all buying options" products (rare in $30-80 range)
 
 ### TODO
-- [ ] **P0 — PR1 hot-fix**: rate_limiter.py:11 `from scraper.config` → `from config` (D1 boot 차단)
-- [ ] **P0 — PR2 proxy+auth**: SessionManager 에 proxy/profile 전달 (C1/F1), control endpoint 토큰 인증 (C2/F9/Q1)
-- [ ] **P0 — PR3 durability**: checkpoint 단계적 status (scraped→persisted), retry status='failed' 마킹, fallback replay 도구 (F5/C3/F6/R15)
+- [x] ~~**P0 — PR1 hot-fix**: rate_limiter.py:11 `from scraper.config` → `from config` (D1 boot 차단)~~ (657d0c9 2026-05-01)
+- [x] ~~**P0 — PR2 proxy+auth**: SessionManager 에 proxy/profile 전달 (C1/F1), control endpoint 토큰 인증 (C2/F9/Q1)~~ (81d0d7c+1a21df7 2026-05-01)
+- [x] ~~**P0 — PR3 durability**: checkpoint 단계적 status (scraped→persisted), retry status='failed' 마킹, fallback replay 도구 (F5/C3/F6/R15)~~ (8d1c6e0+1965f6e 2026-05-01)
 - [ ] **P1 — PR4 동시성**: Pydantic Field 제약, batch isolation (F4), flush lock 해제 (H2/F8), ban → redistribute (F3)
 - [ ] **P1 — PR5 Rails**: recursive_sanitize, batch_upsert 입력 검증 (H3/F10/Q5)
 - [ ] **P1 — PR6 DX**: scraper/README.md, .env.example 에 M9 변수 18종, requirements.txt scrapling 핀 정확화 (D2-D4)
@@ -200,6 +200,16 @@ test/jobs/sync_jobs_test.rb
 ---
 
 ## Session Notes
+
+### 2026-05-01 (JKI-98 P0 4건 즉시 fix)
+- 5 commit: 657d0c9 (D1 boot), 81d0d7c (PR2 proxy+auth+Pydantic), 1a21df7 (PR2 follow-up), 8d1c6e0 (PR3 durability), 1965f6e (PR3 follow-up)
+- 4개 P0 (D1 boot, C1/F1 proxy, F5 durability, C2/F9 auth) + 5개 HIGH (C3/F6/F7/F8/H4) + 다수 P1 입력검증 (Q2-Q4)
+- 신규 산출물: scripts/replay_fallback.py (멱등 replay), /readyz endpoint
+- Codex Gate: PR1 APPROVE / PR2 REVISE-then-APPROVE / PR3 REVISE-then-APPROVE (cascade high → medium 작동)
+- 회귀 테스트: 20/20 pass (auth 9 + 입력검증 6 + happy path 5)
+- docs/scraper-p0-fixes-2026-05-01.md 작성
+- 잔존 Risk: F4 (batch isolation, P1), F3 (ban redistribute, P1), 100-ASIN 24h soak 미수행 (별도 24h)
+- Service 부팅 가능 상태 복귀: bin/dev 의 scraper line 정상 기동, /health 200, /readyz 인증 200
 
 ### 2026-05-01 (Scraper A — 5-skill 통합 리뷰)
 - /review /codex /browse /devex-review /qa 5종 → P0 4건, P1 7건, P2 7건, Risk 15건 도출

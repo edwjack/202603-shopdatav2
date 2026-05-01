@@ -68,3 +68,4 @@ scraper/_*.py
 scraper/__pycache__/
 scraper/parsers/__pycache__/
 .gstack/
+scraper/scraper/
