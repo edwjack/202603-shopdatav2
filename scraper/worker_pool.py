@@ -188,6 +188,10 @@ class WorkerPool:
     async def run_batch(self, batch_id: int, asins_by_channel: dict[str, list[str]]):
         """Run a scraping batch distributing ASINs across channels.
 
+        Wrapped in try/finally so terminal batch status is always persisted
+        (F7 fix Gate-2). Without this, an exception inside the queue/join
+        path would leave batches.status='in_progress' forever.
+
         Args:
             batch_id: Rails SourcingBatch ID for checkpoint correlation
             asins_by_channel: dict from ProxyRotator.distribute_asins()
@@ -203,52 +207,56 @@ class WorkerPool:
         # Initialize checkpoint
         self.checkpoint.init_batch(batch_id, all_asins, channel_map)
 
-        # Check for already-completed ASINs (resume support)
-        remaining = self.checkpoint.get_remaining(batch_id)
-        remaining_set = set(remaining)
-
-        # Enqueue only remaining ASINs
-        for channel, asins in asins_by_channel.items():
-            for asin in asins:
-                if asin in remaining_set:
-                    await self._task_queue.put((asin, channel, batch_id))
-
-        if not remaining:
-            logger.info(f"[WorkerPool] Batch {batch_id}: all ASINs already completed")
-            return
-
-        logger.info(
-            f"[WorkerPool] Batch {batch_id}: {len(remaining)} ASINs queued "
-            f"(of {len(all_asins)} total)"
-        )
-
-        # Start worker coroutines
-        self._worker_tasks = [
-            asyncio.create_task(self._worker_loop(worker))
-            for worker in self._workers
-        ]
-
-        # Wait for all items to be processed
-        await self._task_queue.join()
-
-        # Signal workers to stop
-        for _ in self._workers:
-            await self._task_queue.put(None)
-
-        await asyncio.gather(*self._worker_tasks, return_exceptions=True)
-        self._worker_tasks.clear()
-
-        # Flush remaining results
-        await self.result_buffer.flush()
-
-        progress = self.checkpoint.get_progress(batch_id)
-        # Persist terminal batch state — F7 fix.
-        terminal = "completed" if progress.get("remaining", 0) == 0 else "failed"
+        terminal = "failed"  # default if we exit via exception
         try:
-            self.checkpoint.set_batch_status(batch_id, terminal)
-        except Exception as e:
-            logger.warning(f"[WorkerPool] set_batch_status failed: {e}")
-        logger.info(f"[WorkerPool] Batch {batch_id} {terminal}: {progress}")
+            # Check for already-completed ASINs (resume support)
+            remaining = self.checkpoint.get_remaining(batch_id)
+            remaining_set = set(remaining)
+
+            # Enqueue only remaining ASINs
+            for channel, asins in asins_by_channel.items():
+                for asin in asins:
+                    if asin in remaining_set:
+                        await self._task_queue.put((asin, channel, batch_id))
+
+            if not remaining:
+                logger.info(f"[WorkerPool] Batch {batch_id}: all ASINs already completed")
+                terminal = "completed"
+                return
+
+            logger.info(
+                f"[WorkerPool] Batch {batch_id}: {len(remaining)} ASINs queued "
+                f"(of {len(all_asins)} total)"
+            )
+
+            # Start worker coroutines
+            self._worker_tasks = [
+                asyncio.create_task(self._worker_loop(worker))
+                for worker in self._workers
+            ]
+
+            # Wait for all items to be processed
+            await self._task_queue.join()
+
+            # Signal workers to stop
+            for _ in self._workers:
+                await self._task_queue.put(None)
+
+            await asyncio.gather(*self._worker_tasks, return_exceptions=True)
+            self._worker_tasks.clear()
+
+            # Flush remaining results
+            await self.result_buffer.flush()
+
+            progress = self.checkpoint.get_progress(batch_id)
+            terminal = "completed" if progress.get("remaining", 0) == 0 else "failed"
+            logger.info(f"[WorkerPool] Batch {batch_id} {terminal}: {progress}")
+        finally:
+            # Always persist terminal batch state — F7 fix Gate-2.
+            try:
+                self.checkpoint.set_batch_status(batch_id, terminal)
+            except Exception as e:
+                logger.warning(f"[WorkerPool] set_batch_status failed: {e}")
 
     # ------------------------------------------------------------------
     # Worker loop

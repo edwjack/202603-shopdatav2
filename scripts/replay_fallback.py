@@ -66,6 +66,23 @@ def _post(endpoint: str, token: str, products: list, batch_id: int) -> tuple[boo
         return False, f"exception: {exc}"
 
 
+def _is_already_persisted(checkpoint, batch_id, asin) -> bool:
+    """Idempotency filter: skip rows that checkpoint already says are
+    persisted (a previous replay or a late on_persisted callback may have
+    transitioned them)."""
+    if checkpoint is None or batch_id is None or not asin:
+        return False
+    try:
+        with checkpoint._lock:
+            row = checkpoint._conn.execute(
+                "SELECT status FROM asin_progress WHERE batch_id=? AND asin=?",
+                (batch_id, asin),
+            ).fetchone()
+        return row is not None and row["status"] == "persisted"
+    except Exception:
+        return False
+
+
 def replay_file(path: str, endpoint: str, token: str, checkpoint, dry_run: bool) -> bool:
     with open(path, "r", encoding="utf-8") as fh:
         payload = json.load(fh)
@@ -73,6 +90,8 @@ def replay_file(path: str, endpoint: str, token: str, checkpoint, dry_run: bool)
     if not items:
         # Old fallback format (pre-PR3) — has 'products' but no batch_id/asin.
         # Best-effort: send to Rails but skip checkpoint transition.
+        # Rails ProductsController#batch_upsert uses find_or_initialize_by(asin),
+        # so duplicate sends are idempotent at the DB layer.
         products = payload.get("products", [])
         if not products:
             return True  # empty file
@@ -83,21 +102,33 @@ def replay_file(path: str, endpoint: str, token: str, checkpoint, dry_run: bool)
         print(f"{'OK' if ok else 'FAIL'} {path} (legacy, {len(products)} items): {info}")
         return ok
 
-    products = [it["product"] for it in items]
-    pair_keys = [(it.get("batch_id"), it.get("asin")) for it in items]
-    if dry_run:
-        print(f"[dry-run] would POST {len(products)} items from {path}")
+    # Idempotency filter — drop items that the checkpoint already marks
+    # persisted. Without this, a re-run after partial success would resend
+    # everything (Rails dedupes via find_or_initialize_by but we still pay
+    # the network and Rails-side write cost).
+    fresh_items = [
+        it for it in items
+        if not _is_already_persisted(checkpoint, it.get("batch_id"), it.get("asin"))
+    ]
+    skipped = len(items) - len(fresh_items)
+    if not fresh_items:
+        print(f"OK {path} ({len(items)} items, all already persisted; skipping)")
         return True
 
-    # Use the largest batch_id encountered as the "outer" batch_id for Rails.
-    # Rails just uses this for logging; per-item correctness is in the products.
+    products = [it["product"] for it in fresh_items]
+    pair_keys = [(it.get("batch_id"), it.get("asin")) for it in fresh_items]
+    if dry_run:
+        print(f"[dry-run] would POST {len(products)} items from {path} "
+              f"(skipped {skipped} already-persisted)")
+        return True
+
     batch_id_outer = max((b for b, _ in pair_keys if b), default=0)
     ok, info = _post(endpoint, token, products, batch_id=batch_id_outer)
-    print(f"{'OK' if ok else 'FAIL'} {path} ({len(products)} items): {info}")
+    print(f"{'OK' if ok else 'FAIL'} {path} "
+          f"({len(products)} items, skipped {skipped} already-persisted): {info}")
     if not ok:
         return False
 
-    # Mark persisted in checkpoint
     if checkpoint is not None:
         for b_id, asin in pair_keys:
             if b_id is None or not asin:
