@@ -509,10 +509,15 @@ class WorkerPool:
                 for _ in range(sentinels):
                     await banned_queue.put(None)
 
-            # Include the in-flight blocked_asin so it gets a fresh attempt
-            # on a healthy channel rather than being prematurely marked failed.
+            # Track the in-flight blocked item by position so we don't
+            # mis-identify a duplicate queued ASIN as "the one in flight"
+            # (Gate-2v2 fix). We always insert it at index 0; the loop
+            # below sets blocked_requeued only when index 0 actually
+            # lands on a healthy queue.
+            blocked_idx: Optional[int] = None
             if blocked_asin:
                 drained.insert(0, (blocked_asin, banned_channel, batch_id))
+                blocked_idx = 0
 
             if not drained:
                 return False
@@ -525,7 +530,7 @@ class WorkerPool:
             # Round-robin across healthy channels, weighted by channel.weight
             total_w = sum(self.proxy_rotator.channels[h].weight for h in healthy)
             healthy_idx = 0
-            healthy_cycle = []
+            healthy_cycle: list[str] = []
             for h in healthy:
                 w = self.proxy_rotator.channels[h].weight
                 count = max(1, round(len(drained) * (w / total_w))) if total_w > 0 else len(drained) // len(healthy)
@@ -536,12 +541,22 @@ class WorkerPool:
             healthy_cycle = healthy_cycle[:len(drained)]
 
             blocked_requeued = False
-            for (asin, _old_channel, b_id), new_channel in zip(drained, healthy_cycle):
+            for i, ((asin, _old_channel, b_id), new_channel) in enumerate(zip(drained, healthy_cycle)):
                 target = self._queues.get(new_channel)
                 if target is None:
-                    continue
+                    # Healthy channel had no queue (shouldn't happen — start()
+                    # populates _queues for every rotator channel — but if it
+                    # does, fall back to any other healthy channel).
+                    fallback_target = next(
+                        (self._queues[h] for h in healthy if h in self._queues and h != new_channel),
+                        None,
+                    )
+                    if fallback_target is None:
+                        # Truly nowhere to put it — skip. blocked_requeued stays False.
+                        continue
+                    target = fallback_target
                 await target.put((asin, new_channel, b_id))
-                if asin == blocked_asin:
+                if i == blocked_idx:
                     blocked_requeued = True
             return blocked_requeued
 
