@@ -201,6 +201,16 @@ test/jobs/sync_jobs_test.rb
 
 ## Session Notes
 
+### 2026-05-01 (R-CARRY-13 — 100-ASIN 24h soak 백그라운드 시작)
+- **결과 문서 위치**: `docs/soak/100-asin-24h-2026-05-01.md` (placeholder 먼저, summarizer 가 24h 동안 매 fetch마다 갱신)
+- **Runtime 로그**: `data/soak/<run-id>.{jsonl,status,scraper.log,scraper.pid}` (gitignored)
+- **Runner**: `scripts/soak_100_asin_24h.sh` + `scripts/soak_summarize.py`
+- **Detach**: `nohup setsid bash scripts/soak_100_asin_24h.sh` — 세션 종료 후에도 24h 지속
+- **모드**: real (`MOCK_EXTERNAL_APIS=false`), DIRECT-only, 1 worker, AMAZON_ZIP=90006
+- **Pacing**: 10개 ASIN × 10 cycles = 100 fetches, 14.4분 간격, 24h 분산
+- **다음 세션 확인**: `cat /home/opc/202603-shopdatav2/data/soak/*.status` 후 `cat docs/soak/100-asin-24h-2026-05-01.md`
+- 완료 시 JKI-86 (3-channel benchmark) 가 자연스러운 후속 (DECODO/SMARTPROXY 설정 + 재실행)
+
 ### 2026-05-01 (PR6+PR7 — DX + OpenAPI 메타 마무리)
 - 4 commit: 7ef7663 (PR6 README + .env M9 vars + requirements pin), 36cc34c (.gitignore exception), f9d50c6 (PR7 OpenAPI 메타 + Rails truncate warn)
 - D2-D6: scraper/README.md (931 단어), .env.example +17 M9 vars, requirements.txt Py 3.10+ comment

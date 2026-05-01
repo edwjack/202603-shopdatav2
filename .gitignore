@@ -71,3 +71,4 @@ scraper/__pycache__/
 scraper/parsers/__pycache__/
 .gstack/
 scraper/scraper/
+data/soak/
