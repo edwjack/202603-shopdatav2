@@ -1,4 +1,8 @@
+# Python 3.10+ required — Scrapling 0.4.x is not published for 3.9 on PyPI.
+# This repo's scraper/.venv uses Python 3.12; match that for fresh installs.
+# After install, run `scrapling install` once to fetch browser binaries (~150MB).
 scrapling[fetchers]==0.4.2
+
 fastapi>=0.100.0
 uvicorn[standard]
 httpx[http2]
