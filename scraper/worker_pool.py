@@ -127,11 +127,21 @@ class WorkerPool:
         self.result_buffer = result_buffer
         self.max_workers = max_workers or int(os.environ.get("SCRAPER_WORKERS", "3"))
 
-        self._task_queue: asyncio.Queue = asyncio.Queue()
+        # Per-channel queues (F2 fix). Workers pop from their own channel's
+        # queue only — guarantees the proxy/profile actually used matches the
+        # task's recorded channel. With a single shared queue, a direct worker
+        # could pop a decodo task and stats would lie.
+        self._queues: dict[str, asyncio.Queue] = {}
         self._workers: list[WorkerState] = []
         self._worker_tasks: list[asyncio.Task] = []
         self._memory_watchdog: Optional[MemoryWatchdog] = None
         self._running = False
+        # Serialize concurrent run_batch calls (F4 fix). Without this, two
+        # /scrape/batch hits would share queues and overwrite _worker_tasks.
+        self._batch_lock = asyncio.Lock()
+        # Guards _handle_ban so multiple workers blocking simultaneously
+        # don't try to drain/redistribute the same channel concurrently.
+        self._ban_lock = asyncio.Lock()
         # palette_counter moved to per-worker WorkerState to avoid race condition
 
     # ------------------------------------------------------------------
@@ -139,12 +149,18 @@ class WorkerPool:
     # ------------------------------------------------------------------
 
     async def start(self):
-        """Initialize workers and memory watchdog."""
+        """Initialize workers, per-channel queues, and memory watchdog."""
         if self._running:
             return
 
         self._memory_watchdog = MemoryWatchdog(on_threshold=self._handle_memory_pressure)
         await self._memory_watchdog.start()
+
+        # Per-channel queue for every channel known to the rotator (so a
+        # banned channel can still receive redistributed work later if it
+        # cools down — though current design redistributes once at ban).
+        for ch in self.proxy_rotator.channels:
+            self._queues[ch] = asyncio.Queue()
 
         # Create worker states with channel assignment
         channels = [name for name, cfg in self.proxy_rotator.channels.items() if cfg.enabled]
@@ -155,15 +171,20 @@ class WorkerPool:
             self._workers.append(worker)
 
         self._running = True
-        logger.info(f"[WorkerPool] Started with {self.max_workers} workers")
+        logger.info(
+            f"[WorkerPool] Started with {self.max_workers} workers, "
+            f"{len(self._queues)} per-channel queues"
+        )
 
     async def stop(self):
         """Gracefully stop all workers and watchdog."""
         self._running = False
 
-        # Signal workers to stop by putting None sentinels
-        for _ in self._workers:
-            await self._task_queue.put(None)
+        # One sentinel per worker on its own channel queue.
+        for worker in self._workers:
+            queue = self._queues.get(worker.channel)
+            if queue is not None:
+                await queue.put(None)
 
         # Wait for worker tasks to finish
         if self._worker_tasks:
@@ -188,6 +209,11 @@ class WorkerPool:
     async def run_batch(self, batch_id: int, asins_by_channel: dict[str, list[str]]):
         """Run a scraping batch distributing ASINs across channels.
 
+        Serialized via _batch_lock (F4 fix): two concurrent /scrape/batch
+        calls cannot share queues / worker_tasks. The second waits for the
+        first to release. At 5K/day target this is fine; if true parallel
+        batches are ever needed, switch to per-batch worker subsets.
+
         Wrapped in try/finally so terminal batch status is always persisted
         (F7 fix Gate-2). Without this, an exception inside the queue/join
         path would leave batches.status='in_progress' forever.
@@ -196,6 +222,10 @@ class WorkerPool:
             batch_id: Rails SourcingBatch ID for checkpoint correlation
             asins_by_channel: dict from ProxyRotator.distribute_asins()
         """
+        async with self._batch_lock:
+            await self._run_batch_locked(batch_id, asins_by_channel)
+
+    async def _run_batch_locked(self, batch_id: int, asins_by_channel: dict[str, list[str]]):
         # Build channel map for checkpoint
         all_asins = []
         channel_map = {}
@@ -207,17 +237,31 @@ class WorkerPool:
         # Initialize checkpoint
         self.checkpoint.init_batch(batch_id, all_asins, channel_map)
 
-        terminal = "failed"  # default if we exit via exception
+        terminal = "failed"
         try:
             # Check for already-completed ASINs (resume support)
             remaining = self.checkpoint.get_remaining(batch_id)
             remaining_set = set(remaining)
 
-            # Enqueue only remaining ASINs
+            # Enqueue only remaining ASINs onto each channel's own queue.
+            queued_per_channel: dict[str, int] = {}
             for channel, asins in asins_by_channel.items():
+                queue = self._queues.get(channel)
+                if queue is None:
+                    # Channel was disabled or unknown — fall back to first
+                    # enabled queue so work isn't dropped silently.
+                    fallback = next(iter(self._queues), None)
+                    if fallback is None:
+                        logger.error(f"[WorkerPool] No queues available for channel {channel}")
+                        continue
+                    queue = self._queues[fallback]
+                    channel_for_record = fallback
+                else:
+                    channel_for_record = channel
                 for asin in asins:
                     if asin in remaining_set:
-                        await self._task_queue.put((asin, channel, batch_id))
+                        await queue.put((asin, channel_for_record, batch_id))
+                        queued_per_channel[channel_for_record] = queued_per_channel.get(channel_for_record, 0) + 1
 
             if not remaining:
                 logger.info(f"[WorkerPool] Batch {batch_id}: all ASINs already completed")
@@ -225,22 +269,24 @@ class WorkerPool:
                 return
 
             logger.info(
-                f"[WorkerPool] Batch {batch_id}: {len(remaining)} ASINs queued "
-                f"(of {len(all_asins)} total)"
+                f"[WorkerPool] Batch {batch_id}: {len(remaining)} ASINs queued, "
+                f"per-channel={queued_per_channel}"
             )
 
-            # Start worker coroutines
+            # Start worker coroutines (one per worker, each pinned to its channel queue)
             self._worker_tasks = [
                 asyncio.create_task(self._worker_loop(worker))
                 for worker in self._workers
             ]
 
-            # Wait for all items to be processed
-            await self._task_queue.join()
+            # Wait for every channel queue to drain
+            await asyncio.gather(*(q.join() for q in self._queues.values()))
 
-            # Signal workers to stop
-            for _ in self._workers:
-                await self._task_queue.put(None)
+            # One sentinel per worker on its own channel queue
+            for worker in self._workers:
+                q = self._queues.get(worker.channel)
+                if q is not None:
+                    await q.put(None)
 
             await asyncio.gather(*self._worker_tasks, return_exceptions=True)
             self._worker_tasks.clear()
@@ -252,7 +298,6 @@ class WorkerPool:
             terminal = "completed" if progress.get("remaining", 0) == 0 else "failed"
             logger.info(f"[WorkerPool] Batch {batch_id} {terminal}: {progress}")
         finally:
-            # Always persist terminal batch state — F7 fix Gate-2.
             try:
                 self.checkpoint.set_batch_status(batch_id, terminal)
             except Exception as e:
@@ -263,7 +308,7 @@ class WorkerPool:
     # ------------------------------------------------------------------
 
     async def _worker_loop(self, worker: WorkerState):
-        """Main loop for a single worker."""
+        """Main loop for a single worker — pulls only from its channel's queue."""
         worker.is_running = True
 
         # Initialize browser session with channel proxy + stealth profile.
@@ -275,6 +320,14 @@ class WorkerPool:
             worker.session = SessionManager(proxy=proxy, profile=worker.profile)
             # Session start happens on first fetch (lazy init)
 
+        my_queue = self._queues.get(worker.channel)
+        if my_queue is None:
+            logger.error(
+                f"[Worker {worker.worker_id}] No queue for channel {worker.channel}"
+            )
+            worker.is_running = False
+            return
+
         logger.info(
             f"[Worker {worker.worker_id}] Started on channel={worker.channel} "
             f"tz={worker.profile['timezone']}"
@@ -282,14 +335,17 @@ class WorkerPool:
 
         try:
             while True:
-                item = await self._task_queue.get()
+                item = await my_queue.get()
                 if item is None:
-                    self._task_queue.task_done()
+                    my_queue.task_done()
                     break
 
                 asin, channel, batch_id = item
+                # By construction channel == worker.channel (per-channel queue),
+                # but we still pass it through to keep stats correct if a future
+                # redistribute hands us cross-channel work.
                 await self._scrape_one(worker, asin, channel, batch_id)
-                self._task_queue.task_done()
+                my_queue.task_done()
 
         except asyncio.CancelledError:
             pass
@@ -344,6 +400,11 @@ class WorkerPool:
                 self.proxy_rotator.record_failure(channel, is_ban=True)
                 self.checkpoint.mark_failed(batch_id, asin, "blocked_by_amazon")
                 logger.warning(f"[Worker {worker.worker_id}] BLOCKED on {asin}")
+                # F3 fix: drain the banned channel's queue and redistribute
+                # remaining ASINs to healthy channels. Without this, the
+                # ASINs queued for this channel sit forever (channel is
+                # cooled down for an hour) while the batch stalls.
+                await self._handle_ban(channel, batch_id)
                 return
 
             # Parse product data
@@ -391,6 +452,82 @@ class WorkerPool:
         html_lower = html.lower()
         return any(signal.lower() in html_lower for signal in block_signals)
 
+    async def _handle_ban(self, banned_channel: str, batch_id: int) -> None:
+        """Drain remaining items from banned_channel's queue and re-enqueue
+        on healthy channels' queues so the batch can keep making progress
+        while the banned channel cools down (F3 fix).
+
+        Idempotent: guarded by _ban_lock so multiple workers detecting blocks
+        in parallel don't drain/redistribute concurrently.
+        """
+        async with self._ban_lock:
+            # If channel already cooled / re-enabled or queue gone, nothing to do.
+            banned_queue = self._queues.get(banned_channel)
+            if banned_queue is None or banned_queue.empty():
+                return
+
+            healthy = [
+                ch for ch, cfg in self.proxy_rotator.channels.items()
+                if cfg.enabled and not self.proxy_rotator.is_banned(ch) and ch != banned_channel
+            ]
+            if not healthy:
+                logger.warning(
+                    f"[WorkerPool] Ban on {banned_channel} but no healthy channel "
+                    f"to redistribute to — items stay queued until cooldown ends"
+                )
+                return
+
+            # Non-blocking drain. Only the in-queue items move; in-flight tasks
+            # already with workers continue (and will detect the ban themselves).
+            drained: list[tuple] = []
+            sentinels = 0
+            while True:
+                try:
+                    item = banned_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+                if item is None:
+                    sentinels += 1
+                    banned_queue.task_done()
+                    continue
+                drained.append(item)
+                # Mark task_done immediately — we're moving it, not finishing it.
+                banned_queue.task_done()
+
+            # Restore sentinels so the worker on banned_channel still gets
+            # its stop signal at end-of-batch.
+            for _ in range(sentinels):
+                await banned_queue.put(None)
+
+            if not drained:
+                return
+
+            logger.warning(
+                f"[WorkerPool] Redistributing {len(drained)} ASINs from {banned_channel} "
+                f"across {healthy}"
+            )
+
+            # Round-robin across healthy channels, using their relative weights
+            # so a 5:2.5 split sends 2x as many to the heavier channel.
+            total_w = sum(self.proxy_rotator.channels[h].weight for h in healthy)
+            healthy_idx = 0
+            healthy_cycle = []
+            for h in healthy:
+                w = self.proxy_rotator.channels[h].weight
+                count = max(1, round(len(drained) * (w / total_w))) if total_w > 0 else len(drained) // len(healthy)
+                healthy_cycle.extend([h] * count)
+            # Pad to len(drained) if rounding under-allocated.
+            while len(healthy_cycle) < len(drained):
+                healthy_cycle.append(healthy[healthy_idx % len(healthy)])
+                healthy_idx += 1
+            healthy_cycle = healthy_cycle[:len(drained)]
+
+            for (asin, _old_channel, b_id), new_channel in zip(drained, healthy_cycle):
+                target = self._queues.get(new_channel)
+                if target is None:
+                    continue
+                await target.put((asin, new_channel, b_id))
+
     async def _palette_cleanse(self, worker: WorkerState):
         """Visit a non-product page to look like normal browsing."""
         if not worker.session or not worker.session.is_active:
@@ -421,7 +558,8 @@ class WorkerPool:
         return {
             "max_workers": self.max_workers,
             "active_workers": sum(1 for w in self._workers if w.is_running),
-            "queue_size": self._task_queue.qsize(),
+            "queue_size": sum(q.qsize() for q in self._queues.values()),
+            "queues_per_channel": {ch: q.qsize() for ch, q in self._queues.items()},
             "workers": [
                 {
                     "id": w.worker_id,
