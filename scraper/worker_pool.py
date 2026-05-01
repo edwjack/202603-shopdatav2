@@ -543,19 +543,21 @@ class WorkerPool:
             blocked_requeued = False
             for i, ((asin, _old_channel, b_id), new_channel) in enumerate(zip(drained, healthy_cycle)):
                 target = self._queues.get(new_channel)
+                actual_channel = new_channel
                 if target is None:
                     # Healthy channel had no queue (shouldn't happen — start()
                     # populates _queues for every rotator channel — but if it
-                    # does, fall back to any other healthy channel).
-                    fallback_target = next(
-                        (self._queues[h] for h in healthy if h in self._queues and h != new_channel),
+                    # does, fall back to any other healthy channel and update
+                    # the channel id in the task tuple so worker/queue/stats
+                    # all agree (Gate v3 fix).
+                    fallback_pair = next(
+                        ((h, self._queues[h]) for h in healthy if h in self._queues and h != new_channel),
                         None,
                     )
-                    if fallback_target is None:
-                        # Truly nowhere to put it — skip. blocked_requeued stays False.
+                    if fallback_pair is None:
                         continue
-                    target = fallback_target
-                await target.put((asin, new_channel, b_id))
+                    actual_channel, target = fallback_pair
+                await target.put((asin, actual_channel, b_id))
                 if i == blocked_idx:
                     blocked_requeued = True
             return blocked_requeued
