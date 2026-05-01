@@ -16,15 +16,17 @@ Architecture (v5 — 50K scale):
 import os
 import json
 import time
+import re
 import uuid
 import random
 import asyncio
 import logging
+import secrets
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Header, Depends, status
+from pydantic import BaseModel, Field, field_validator
 
 from parsers.images import parse_images
 from parsers.overview import parse_overview
@@ -45,6 +47,32 @@ MOCK_MODE = os.environ.get("MOCK_EXTERNAL_APIS", "true").lower() == "true"
 
 # Per-task state: {task_id: {status, total, completed, failed, results, created_at}}
 tasks: dict = {}
+
+
+# ---------------------------------------------------------------------------
+# Auth — every mutating / data-disclosing endpoint requires SCRAPER_API_TOKEN.
+# Same token Rails uses to authenticate the scraper to /api/products/batch_upsert
+# (see app/controllers/api/products_controller.rb#authenticate_scraper_token).
+# Without this, anyone on the same host can trigger expensive scrape batches
+# or rewrite the proxy ratio (bug C2/F9/Q1 from 2026-05-01 5-skill audit).
+# ---------------------------------------------------------------------------
+
+_ASIN_RE = re.compile(r"^[A-Z0-9]{10}$")
+
+
+def verify_token(authorization: Optional[str] = Header(None)):
+    expected = os.environ.get("SCRAPER_API_TOKEN")
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="SCRAPER_API_TOKEN not configured",
+        )
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    if not token or not secrets.compare_digest(token, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing token",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -91,38 +119,55 @@ app = FastAPI(title="Amazon Scraper", version="5.0.0", lifespan=lifespan)
 # Pydantic request models
 # ---------------------------------------------------------------------------
 
+def _validate_asins(asins: list[str]) -> list[str]:
+    """Reject anything outside [A-Z0-9]{10} so we don't queue garbage that
+    workers will silently drop and pollute the checkpoint with `failed`."""
+    bad = [a for a in asins if not _ASIN_RE.fullmatch(a or "")]
+    if bad:
+        raise ValueError(f"invalid ASINs (expected 10 chars [A-Z0-9]): {bad[:5]}")
+    return asins
+
+
 class ScrapeRequest(BaseModel):
-    asins: list[str]
-    category_id: Optional[int] = None
-    batch_id: Optional[int] = None
+    asins: list[str] = Field(min_length=1, max_length=10000)
+    category_id: Optional[int] = Field(default=None, ge=0)
+    batch_id: Optional[int] = Field(default=None, ge=0)
+
+    @field_validator("asins")
+    @classmethod
+    def _v(cls, v): return _validate_asins(v)
 
 
 class BsrRequest(BaseModel):
-    amazon_node_id: str
-    category_slug: str
+    amazon_node_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    category_slug: str = Field(min_length=1, max_length=128)
 
 
 class MoversRequest(BaseModel):
-    amazon_node_id: str
-    category_slug: str
+    amazon_node_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    category_slug: str = Field(min_length=1, max_length=128)
 
 
 class UrlsRequest(BaseModel):
-    amazon_node_id: str
-    pages: int = 1
+    amazon_node_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    pages: int = Field(default=1, ge=1, le=20)
 
 
 class TrendsRequest(BaseModel):
-    keywords: list[str]
+    keywords: list[str] = Field(min_length=1, max_length=50)
 
 
 class SocialRequest(BaseModel):
-    keywords: list[str]
-    subreddits: list[str] = []
+    keywords: list[str] = Field(min_length=1, max_length=50)
+    subreddits: list[str] = Field(default_factory=list, max_length=50)
 
 
 class ResyncRequest(BaseModel):
-    asins: list[str]
+    asins: list[str] = Field(min_length=1, max_length=10000)
+
+    @field_validator("asins")
+    @classmethod
+    def _v(cls, v): return _validate_asins(v)
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +364,7 @@ async def process_price_resync(task_id: str, asins: list[str]):
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@app.post("/scrape")
+@app.post("/scrape", dependencies=[Depends(verify_token)])
 async def start_scrape(req: ScrapeRequest, background_tasks: BackgroundTasks):
     """Legacy endpoint — delegates to /scrape/batch with single chunk."""
     cleanup_stale_tasks()
@@ -333,24 +378,39 @@ async def start_scrape(req: ScrapeRequest, background_tasks: BackgroundTasks):
 # ---------------------------------------------------------------------------
 
 class BatchScrapeRequest(BaseModel):
-    asins: list[str]
-    batch_id: int
-    daily_limit: int = 5000
+    asins: list[str] = Field(min_length=1, max_length=10000)
+    batch_id: int = Field(gt=0)
+    daily_limit: int = Field(default=5000, gt=0, le=100000)
+
+    @field_validator("asins")
+    @classmethod
+    def _v(cls, v): return _validate_asins(v)
 
 
 class ProxyRatioRequest(BaseModel):
-    direct: float = 5
-    decodo: float = 2.5
-    smart: float = 2.5
+    # ge=0 (not gt=0): a channel can be disabled by setting its weight to 0
+    direct: float = Field(default=5, ge=0, le=100)
+    decodo: float = Field(default=2.5, ge=0, le=100)
+    smart: float = Field(default=2.5, ge=0, le=100)
+
+    @field_validator("direct", "decodo", "smart")
+    @classmethod
+    def _finite(cls, v):
+        # Reject NaN / Inf — Pydantic accepts them by default in float fields,
+        # which would cascade into ZeroDivision/garbage in distribute_asins.
+        import math
+        if not math.isfinite(v):
+            raise ValueError("weight must be finite")
+        return v
 
 
 class BatchSizeRequest(BaseModel):
-    direct: Optional[int] = None
-    decodo: Optional[int] = None
-    smart: Optional[int] = None
+    direct: Optional[int] = Field(default=None, gt=0, le=10000)
+    decodo: Optional[int] = Field(default=None, gt=0, le=10000)
+    smart: Optional[int] = Field(default=None, gt=0, le=10000)
 
 
-@app.post("/scrape/batch")
+@app.post("/scrape/batch", dependencies=[Depends(verify_token)])
 async def start_batch_scrape(req: BatchScrapeRequest, background_tasks: BackgroundTasks):
     """Start batch scraping with WorkerPool + 3-channel proxy distribution.
 
@@ -397,7 +457,7 @@ async def start_batch_scrape(req: BatchScrapeRequest, background_tasks: Backgrou
     }
 
 
-@app.get("/checkpoint/{batch_id}/remaining")
+@app.get("/checkpoint/{batch_id}/remaining", dependencies=[Depends(verify_token)])
 async def get_checkpoint_remaining(batch_id: int):
     """Get remaining ASINs for a batch (for cross-day resume)."""
     checkpoint = app.state.checkpoint
@@ -411,7 +471,7 @@ async def get_checkpoint_remaining(batch_id: int):
     }
 
 
-@app.put("/config/proxy-ratio")
+@app.put("/config/proxy-ratio", dependencies=[Depends(verify_token)])
 async def update_proxy_ratio(req: ProxyRatioRequest):
     """Hot-reconfigure proxy channel ratio without restart."""
     ratio_str = f"{req.direct}:{req.decodo}:{req.smart}"
@@ -420,7 +480,7 @@ async def update_proxy_ratio(req: ProxyRatioRequest):
     return {"ratio": ratio_str, "stats": app.state.proxy_rotator.stats}
 
 
-@app.put("/config/batch-size")
+@app.put("/config/batch-size", dependencies=[Depends(verify_token)])
 async def update_batch_size(req: BatchSizeRequest):
     """Update per-channel batch sizes."""
     rotator = app.state.proxy_rotator
@@ -438,7 +498,7 @@ async def update_batch_size(req: BatchSizeRequest):
     return {"updated": updated}
 
 
-@app.get("/config/proxy-status")
+@app.get("/config/proxy-status", dependencies=[Depends(verify_token)])
 async def get_proxy_status():
     """Get current proxy channel health, ratio, and cost estimate."""
     return {
@@ -455,7 +515,7 @@ async def get_proxy_status():
     }
 
 
-@app.get("/status/{task_id}")
+@app.get("/status/{task_id}", dependencies=[Depends(verify_token)])
 async def get_task_status(task_id: str):
     """Get status of a specific scraping task."""
     if task_id not in tasks:
@@ -475,7 +535,7 @@ async def health():
     }
 
 
-@app.post("/collect/bsr")
+@app.post("/collect/bsr", dependencies=[Depends(verify_token)])
 async def collect_bsr(req: BsrRequest):
     """Scrape Amazon Best Sellers for a category node. Async with session reuse."""
     cleanup_stale_tasks()
@@ -500,7 +560,7 @@ async def collect_bsr(req: BsrRequest):
         return {"error": str(e), "products": [], "stats": {}}
 
 
-@app.post("/collect/movers")
+@app.post("/collect/movers", dependencies=[Depends(verify_token)])
 async def collect_movers(req: MoversRequest):
     """Scrape Amazon Movers & Shakers for a category node. Async with session reuse."""
     cleanup_stale_tasks()
@@ -522,7 +582,7 @@ async def collect_movers(req: MoversRequest):
         return {"error": str(e), "movers": []}
 
 
-@app.post("/collect/urls")
+@app.post("/collect/urls", dependencies=[Depends(verify_token)])
 async def collect_urls(req: UrlsRequest, background_tasks: BackgroundTasks):
     """Collect ASINs from Amazon Best Sellers pages. Returns task_id for polling."""
     cleanup_stale_tasks()
@@ -531,7 +591,7 @@ async def collect_urls(req: UrlsRequest, background_tasks: BackgroundTasks):
     return {"task_id": task_id}
 
 
-@app.post("/collect/trends")
+@app.post("/collect/trends", dependencies=[Depends(verify_token)])
 async def collect_trends(req: TrendsRequest):
     """Collect Google Trends data for keywords."""
     cleanup_stale_tasks()
@@ -547,7 +607,7 @@ async def collect_trends(req: TrendsRequest):
         return {"trends": [], "error": str(e)}
 
 
-@app.post("/collect/social")
+@app.post("/collect/social", dependencies=[Depends(verify_token)])
 async def collect_social(req: SocialRequest):
     """Collect Reddit signals."""
     cleanup_stale_tasks()
@@ -563,7 +623,7 @@ async def collect_social(req: SocialRequest):
         return {"reddit": {"mentions": 0, "sentiment": None, "top_posts": []}, "tiktok_views": "n/a", "error": str(e)}
 
 
-@app.post("/resync/price")
+@app.post("/resync/price", dependencies=[Depends(verify_token)])
 async def resync_price(req: ResyncRequest, background_tasks: BackgroundTasks):
     """Re-scrape product pages for updated prices. Returns task_id for polling."""
     cleanup_stale_tasks()

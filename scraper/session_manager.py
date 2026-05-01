@@ -9,29 +9,59 @@ US_ZIP_CODE = os.environ.get("AMAZON_ZIP_CODE", "90006")  # Los Angeles
 
 
 class SessionManager:
-    """Manages AsyncStealthySession with auto-recovery and TTL rotation."""
+    """Manages AsyncStealthySession with auto-recovery and TTL rotation.
 
-    def __init__(self):
+    Accepts an optional channel proxy URL and a stealth profile so that
+    each worker fetches with the proxy/locale/timezone/UA/viewport that
+    the WorkerPool assigned to it. Without these, every worker would fall
+    back to DIRECT (the bug fixed in PR2 of the 2026-05-01 audit).
+    """
+
+    def __init__(self, proxy: str = None, profile: dict = None):
         self.max_pages = int(os.environ.get("BROWSER_MAX_PAGES", "3"))
         self.max_fetches = int(os.environ.get("SESSION_MAX_FETCHES", "100"))
+        self.proxy = proxy
+        self.profile = profile or {}
         self._session = None
         self._fetch_count = 0
         self._location_set = False
 
     async def start(self):
-        """Create and enter async session."""
+        """Create and enter async session with optional proxy and stealth profile."""
         from scrapling.fetchers import AsyncStealthySession
-        self._session = AsyncStealthySession(
-            headless=True,
-            block_webrtc=True,
-            hide_canvas=True,
-            max_pages=self.max_pages,
-            timeout=30000,  # milliseconds
-        )
+
+        # Build kwargs that AsyncStealthySession actually understands.
+        # See scrapling/engines/_browsers/_stealth.py:296 — proxy, useragent,
+        # locale, timezone_id, additional_args (for viewport).
+        kwargs = {
+            "headless": True,
+            "block_webrtc": True,
+            "hide_canvas": True,
+            "max_pages": self.max_pages,
+            "timeout": 30000,
+        }
+        if self.proxy:
+            kwargs["proxy"] = self.proxy
+        if self.profile.get("user_agent"):
+            kwargs["useragent"] = self.profile["user_agent"]
+        if self.profile.get("locale"):
+            kwargs["locale"] = self.profile["locale"]
+        if self.profile.get("timezone"):
+            kwargs["timezone_id"] = self.profile["timezone"]
+        viewport = self.profile.get("viewport")
+        if isinstance(viewport, dict) and viewport.get("width") and viewport.get("height"):
+            kwargs["additional_args"] = {"viewport": viewport}
+
+        self._session = AsyncStealthySession(**kwargs)
         await self._session.__aenter__()
         self._fetch_count = 0
         self._location_set = False
-        logger.info(f"[SessionManager] Started (max_pages={self.max_pages})")
+        logger.info(
+            f"[SessionManager] Started (max_pages={self.max_pages}, "
+            f"proxy={'on' if self.proxy else 'direct'}, "
+            f"locale={self.profile.get('locale','default')}, "
+            f"tz={self.profile.get('timezone','default')})"
+        )
 
         # Set US delivery location to prevent non-US redirects
         await self._set_us_location()

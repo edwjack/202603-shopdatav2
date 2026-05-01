@@ -252,10 +252,13 @@ class WorkerPool:
         """Main loop for a single worker."""
         worker.is_running = True
 
-        # Initialize browser session with stealth profile
+        # Initialize browser session with channel proxy + stealth profile.
+        # Without this, every worker silently falls back to DIRECT and the
+        # 3-channel architecture is purely cosmetic (bug C1/F1 from
+        # 2026-05-01 5-skill audit).
         if worker.session is None:
             proxy = self.proxy_rotator.get_proxy(worker.channel)
-            worker.session = SessionManager()
+            worker.session = SessionManager(proxy=proxy, profile=worker.profile)
             # Session start happens on first fetch (lazy init)
 
         logger.info(
