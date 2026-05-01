@@ -8,7 +8,7 @@ Delays auto-adjust based on consecutive success/failure streaks:
 import random
 from dataclasses import dataclass, field
 
-from scraper.config import RATE_LIMITS
+from config import RATE_LIMITS
 
 
 # Per-channel delay floors (seconds)
