@@ -249,11 +249,19 @@ class WorkerPool:
                 queue = self._queues.get(channel)
                 if queue is None:
                     # Channel was disabled or unknown — fall back to first
-                    # enabled queue so work isn't dropped silently.
+                    # enabled queue so work isn't dropped silently. Warn
+                    # because the user's channel intent (cost / proxy choice)
+                    # is being silently changed.
                     fallback = next(iter(self._queues), None)
                     if fallback is None:
                         logger.error(f"[WorkerPool] No queues available for channel {channel}")
                         continue
+                    logger.warning(
+                        f"[WorkerPool] Channel {channel!r} has no queue; rerouting "
+                        f"{len(asins)} ASINs to {fallback!r}. Stats will record "
+                        f"{fallback!r}, not {channel!r}, so proxy intent is preserved "
+                        f"in the data path."
+                    )
                     queue = self._queues[fallback]
                     channel_for_record = fallback
                 else:
@@ -398,13 +406,18 @@ class WorkerPool:
             if self._is_blocked(html):
                 self.rate_limiter.record_failure(channel, is_ban=True)
                 self.proxy_rotator.record_failure(channel, is_ban=True)
-                self.checkpoint.mark_failed(batch_id, asin, "blocked_by_amazon")
                 logger.warning(f"[Worker {worker.worker_id}] BLOCKED on {asin}")
                 # F3 fix: drain the banned channel's queue and redistribute
-                # remaining ASINs to healthy channels. Without this, the
-                # ASINs queued for this channel sit forever (channel is
-                # cooled down for an hour) while the batch stalls.
-                await self._handle_ban(channel, batch_id)
+                # remaining ASINs to healthy channels. Also requeue THIS
+                # blocked ASIN on a healthy channel so it isn't prematurely
+                # marked failed — the block was a channel-level signal, not
+                # a per-ASIN failure (Gate-2 fix).
+                requeued = await self._handle_ban(channel, batch_id, blocked_asin=asin)
+                if not requeued:
+                    # No healthy channel available — this asin counts as a
+                    # retryable failure (mark_failed increments attempts; if
+                    # it hits MAX_ATTEMPTS the row goes terminal 'failed').
+                    self.checkpoint.mark_failed(batch_id, asin, "blocked_by_amazon")
                 return
 
             # Parse product data
@@ -452,20 +465,19 @@ class WorkerPool:
         html_lower = html.lower()
         return any(signal.lower() in html_lower for signal in block_signals)
 
-    async def _handle_ban(self, banned_channel: str, batch_id: int) -> None:
-        """Drain remaining items from banned_channel's queue and re-enqueue
-        on healthy channels' queues so the batch can keep making progress
-        while the banned channel cools down (F3 fix).
+    async def _handle_ban(self, banned_channel: str, batch_id: int,
+                          blocked_asin: Optional[str] = None) -> bool:
+        """Drain remaining items from banned_channel's queue + the in-flight
+        blocked ASIN, re-enqueue on healthy channels (F3 fix).
+
+        Returns True if the blocked_asin (if any) was successfully requeued,
+        False otherwise. The caller uses this to decide whether to also
+        mark_failed the in-flight ASIN.
 
         Idempotent: guarded by _ban_lock so multiple workers detecting blocks
         in parallel don't drain/redistribute concurrently.
         """
         async with self._ban_lock:
-            # If channel already cooled / re-enabled or queue gone, nothing to do.
-            banned_queue = self._queues.get(banned_channel)
-            if banned_queue is None or banned_queue.empty():
-                return
-
             healthy = [
                 ch for ch, cfg in self.proxy_rotator.channels.items()
                 if cfg.enabled and not self.proxy_rotator.is_banned(ch) and ch != banned_channel
@@ -475,40 +487,42 @@ class WorkerPool:
                     f"[WorkerPool] Ban on {banned_channel} but no healthy channel "
                     f"to redistribute to — items stay queued until cooldown ends"
                 )
-                return
+                return False
 
-            # Non-blocking drain. Only the in-queue items move; in-flight tasks
-            # already with workers continue (and will detect the ban themselves).
+            banned_queue = self._queues.get(banned_channel)
             drained: list[tuple] = []
             sentinels = 0
-            while True:
-                try:
-                    item = banned_queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    break
-                if item is None:
-                    sentinels += 1
+            if banned_queue is not None:
+                # Non-blocking drain. In-flight tasks already with other
+                # workers continue (and will detect the ban themselves).
+                while True:
+                    try:
+                        item = banned_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                    if item is None:
+                        sentinels += 1
+                        banned_queue.task_done()
+                        continue
+                    drained.append(item)
                     banned_queue.task_done()
-                    continue
-                drained.append(item)
-                # Mark task_done immediately — we're moving it, not finishing it.
-                banned_queue.task_done()
+                for _ in range(sentinels):
+                    await banned_queue.put(None)
 
-            # Restore sentinels so the worker on banned_channel still gets
-            # its stop signal at end-of-batch.
-            for _ in range(sentinels):
-                await banned_queue.put(None)
+            # Include the in-flight blocked_asin so it gets a fresh attempt
+            # on a healthy channel rather than being prematurely marked failed.
+            if blocked_asin:
+                drained.insert(0, (blocked_asin, banned_channel, batch_id))
 
             if not drained:
-                return
+                return False
 
             logger.warning(
                 f"[WorkerPool] Redistributing {len(drained)} ASINs from {banned_channel} "
-                f"across {healthy}"
+                f"across {healthy} (incl. in-flight {blocked_asin})"
             )
 
-            # Round-robin across healthy channels, using their relative weights
-            # so a 5:2.5 split sends 2x as many to the heavier channel.
+            # Round-robin across healthy channels, weighted by channel.weight
             total_w = sum(self.proxy_rotator.channels[h].weight for h in healthy)
             healthy_idx = 0
             healthy_cycle = []
@@ -516,17 +530,20 @@ class WorkerPool:
                 w = self.proxy_rotator.channels[h].weight
                 count = max(1, round(len(drained) * (w / total_w))) if total_w > 0 else len(drained) // len(healthy)
                 healthy_cycle.extend([h] * count)
-            # Pad to len(drained) if rounding under-allocated.
             while len(healthy_cycle) < len(drained):
                 healthy_cycle.append(healthy[healthy_idx % len(healthy)])
                 healthy_idx += 1
             healthy_cycle = healthy_cycle[:len(drained)]
 
+            blocked_requeued = False
             for (asin, _old_channel, b_id), new_channel in zip(drained, healthy_cycle):
                 target = self._queues.get(new_channel)
                 if target is None:
                     continue
                 await target.put((asin, new_channel, b_id))
+                if asin == blocked_asin:
+                    blocked_requeued = True
+            return blocked_requeued
 
     async def _palette_cleanse(self, worker: WorkerState):
         """Visit a non-product page to look like normal browsing."""
