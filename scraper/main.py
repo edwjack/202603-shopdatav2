@@ -127,7 +127,23 @@ async def lifespan(app: FastAPI):
     await manager.stop()
 
 
-app = FastAPI(title="Amazon Scraper", version="5.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="Amazon Scraper",
+    version="5.0.0",
+    description=(
+        "FastAPI service that scrapes Amazon product pages with stealth "
+        "browser, 3-channel proxy rotation, checkpoint/resume, and "
+        "durable Rails handoff. See `scraper/README.md` for ops detail."
+    ),
+    lifespan=lifespan,
+    openapi_tags=[
+        {"name": "scraping",   "description": "Queue scrape work and check status"},
+        {"name": "config",     "description": "Hot-reconfigure proxy weights and batch sizes"},
+        {"name": "checkpoint", "description": "Resume support (pending + scraped-not-persisted)"},
+        {"name": "collect",    "description": "Best Sellers / Movers / URLs / Trends / Social fetchers"},
+        {"name": "health",     "description": "Liveness + readiness probes"},
+    ],
+)
 
 
 # ---------------------------------------------------------------------------
@@ -144,9 +160,19 @@ def _validate_asins(asins: list[str]) -> list[str]:
 
 
 class ScrapeRequest(BaseModel):
-    asins: list[str] = Field(min_length=1, max_length=10000)
-    category_id: Optional[int] = Field(default=None, ge=0)
-    batch_id: Optional[int] = Field(default=None, ge=0)
+    asins: list[str] = Field(
+        min_length=1, max_length=10000,
+        description="ASINs to scrape; each must match `^[A-Z0-9]{10}$`.",
+        examples=[["B0BSHF7WHW", "B09B8V1LZ3"]],
+    )
+    category_id: Optional[int] = Field(
+        default=None, ge=0,
+        description="Optional Rails Category id for stats correlation.",
+    )
+    batch_id: Optional[int] = Field(
+        default=None, ge=0,
+        description="Optional SourcingBatch id for resume; legacy /scrape ignores this.",
+    )
 
     @field_validator("asins")
     @classmethod
@@ -379,9 +405,16 @@ async def process_price_resync(task_id: str, asins: list[str]):
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@app.post("/scrape", dependencies=[Depends(verify_token)])
+@app.post(
+    "/scrape",
+    dependencies=[Depends(verify_token)],
+    tags=["scraping"],
+    summary="Legacy single-batch scrape (delegates to /scrape/batch)",
+    status_code=202,
+)
 async def start_scrape(req: ScrapeRequest, background_tasks: BackgroundTasks):
-    """Legacy endpoint — delegates to /scrape/batch with single chunk."""
+    """Queues ASINs with no batch_id correlation. Prefer `/scrape/batch`
+    for production — that path uses CheckpointManager and supports resume."""
     cleanup_stale_tasks()
     task_id = new_task(len(req.asins))
     background_tasks.add_task(process_scrape, task_id, req.asins, req.category_id)
@@ -393,9 +426,20 @@ async def start_scrape(req: ScrapeRequest, background_tasks: BackgroundTasks):
 # ---------------------------------------------------------------------------
 
 class BatchScrapeRequest(BaseModel):
-    asins: list[str] = Field(min_length=1, max_length=10000)
-    batch_id: int = Field(gt=0)
-    daily_limit: int = Field(default=5000, gt=0, le=100000)
+    asins: list[str] = Field(
+        min_length=1, max_length=10000,
+        description="ASINs to scrape; each `^[A-Z0-9]{10}$`. Capped at 10K per request.",
+        examples=[["B0BSHF7WHW", "B09B8V1LZ3"]],
+    )
+    batch_id: int = Field(
+        gt=0,
+        description="Rails SourcingBatch id; checkpoint groups state under this key.",
+        examples=[42],
+    )
+    daily_limit: int = Field(
+        default=5000, gt=0, le=100000,
+        description="Per-day cap; ProxyRotator slices `asins[:daily_limit]`.",
+    )
 
     @field_validator("asins")
     @classmethod
@@ -404,9 +448,21 @@ class BatchScrapeRequest(BaseModel):
 
 class ProxyRatioRequest(BaseModel):
     # ge=0 (not gt=0): a channel can be disabled by setting its weight to 0
-    direct: float = Field(default=5, ge=0, le=100)
-    decodo: float = Field(default=2.5, ge=0, le=100)
-    smart: float = Field(default=2.5, ge=0, le=100)
+    direct: float = Field(
+        default=5, ge=0, le=100,
+        description="DIRECT channel weight. Set to 0 to disable.",
+        examples=[5],
+    )
+    decodo: float = Field(
+        default=2.5, ge=0, le=100,
+        description="DECODO proxy weight. Requires DECODO_PROXY_URL.",
+        examples=[2.5],
+    )
+    smart: float = Field(
+        default=2.5, ge=0, le=100,
+        description="SmartProxy weight. Requires SMARTPROXY_URL.",
+        examples=[2.5],
+    )
 
     @field_validator("direct", "decodo", "smart")
     @classmethod
@@ -425,12 +481,19 @@ class BatchSizeRequest(BaseModel):
     smart: Optional[int] = Field(default=None, gt=0, le=10000)
 
 
-@app.post("/scrape/batch", dependencies=[Depends(verify_token)])
+@app.post(
+    "/scrape/batch",
+    dependencies=[Depends(verify_token)],
+    tags=["scraping"],
+    summary="Queue a batch across 3-channel proxies (WorkerPool + checkpoint)",
+    status_code=202,
+)
 async def start_batch_scrape(req: BatchScrapeRequest, background_tasks: BackgroundTasks):
     """Start batch scraping with WorkerPool + 3-channel proxy distribution.
 
-    Returns task_id for polling via /status/{task_id}.
-    Uses CheckpointManager for cross-day resume via batch_id.
+    Returns task_id for polling via `/status/{task_id}`.
+    Uses CheckpointManager for cross-day resume via `batch_id`.
+    Same `batch_id` re-issued → already-completed ASINs skipped.
     """
     cleanup_stale_tasks()
 
@@ -472,7 +535,12 @@ async def start_batch_scrape(req: BatchScrapeRequest, background_tasks: Backgrou
     }
 
 
-@app.get("/checkpoint/{batch_id}/remaining", dependencies=[Depends(verify_token)])
+@app.get(
+    "/checkpoint/{batch_id}/remaining",
+    dependencies=[Depends(verify_token)],
+    tags=["checkpoint"],
+    summary="Pending + scraped-not-persisted ASINs for cross-day resume",
+)
 async def get_checkpoint_remaining(batch_id: int):
     """Get remaining ASINs for a batch (for cross-day resume)."""
     checkpoint = app.state.checkpoint
@@ -486,8 +554,16 @@ async def get_checkpoint_remaining(batch_id: int):
     }
 
 
-@app.put("/config/proxy-ratio", dependencies=[Depends(verify_token)])
+@app.put(
+    "/config/proxy-ratio",
+    dependencies=[Depends(verify_token)],
+    tags=["config"],
+    summary="Hot-reconfigure channel weights without restart",
+)
 async def update_proxy_ratio(req: ProxyRatioRequest):
+    """Channel weights affect distribute_asins. Setting a channel weight to 0
+    disables it. Disabling all three returns an empty queue and the batch
+    completes immediately."""
     """Hot-reconfigure proxy channel ratio without restart."""
     ratio_str = f"{req.direct}:{req.decodo}:{req.smart}"
     app.state.proxy_rotator.reconfigure(ratio_str)
@@ -495,9 +571,15 @@ async def update_proxy_ratio(req: ProxyRatioRequest):
     return {"ratio": ratio_str, "stats": app.state.proxy_rotator.stats}
 
 
-@app.put("/config/batch-size", dependencies=[Depends(verify_token)])
+@app.put(
+    "/config/batch-size",
+    dependencies=[Depends(verify_token)],
+    tags=["config"],
+    summary="Update per-channel batch sizes (DIRECT/DECODO/SMARTPROXY)",
+)
 async def update_batch_size(req: BatchSizeRequest):
-    """Update per-channel batch sizes."""
+    """Override `*_BATCH_SIZE` env vars at runtime. Affects distribute_asins
+    on the *next* /scrape/batch call; in-flight batches are not touched."""
     rotator = app.state.proxy_rotator
     updated = {}
     if req.direct is not None:
@@ -513,9 +595,19 @@ async def update_batch_size(req: BatchSizeRequest):
     return {"updated": updated}
 
 
-@app.get("/config/proxy-status", dependencies=[Depends(verify_token)])
+@app.get(
+    "/config/proxy-status",
+    dependencies=[Depends(verify_token)],
+    tags=["config"],
+    summary="Per-channel health + worker pool stats + result buffer state",
+)
 async def get_proxy_status():
-    """Get current proxy channel health, ratio, and cost estimate."""
+    """Returns:
+    - `channels`: per-channel success/fail counts, ban cooldown, weight
+    - `rate_limiter`: current adaptive delay + pause state per channel
+    - `worker_pool`: max/active workers + per-channel queue size
+    - `result_buffer`: total sent/failed + buffer size
+    """
     return {
         "channels": app.state.proxy_rotator.stats,
         "rate_limiter": {
@@ -530,21 +622,36 @@ async def get_proxy_status():
     }
 
 
-@app.get("/status/{task_id}", dependencies=[Depends(verify_token)])
+@app.get(
+    "/status/{task_id}",
+    dependencies=[Depends(verify_token)],
+    tags=["scraping"],
+    summary="Task status (in_progress / completed / failed)",
+)
 async def get_task_status(task_id: str):
-    """Get status of a specific scraping task."""
+    """Tasks are kept in-memory for ~1 hour after completion (cleanup_stale_tasks)."""
     if task_id not in tasks:
         raise HTTPException(status_code=404, detail="Task not found")
     return tasks[task_id]
 
 
-@app.get("/health")
+@app.get(
+    "/health",
+    tags=["health"],
+    summary="Liveness probe — always 200 with minimal body",
+)
 async def health():
-    """Liveness only. No session/proxy/config detail (public endpoint)."""
+    """Public, no auth. Returns `{"status":"ok"}` only — no session,
+    proxy, or version detail (those leak ops state)."""
     return {"status": "ok"}
 
 
-@app.get("/readyz", dependencies=[Depends(verify_token)])
+@app.get(
+    "/readyz",
+    dependencies=[Depends(verify_token)],
+    tags=["health"],
+    summary="Readiness — version + browser session + worker pool stats",
+)
 async def readyz():
     """Readiness — includes browser session + worker pool stats. Auth-only
     so we don't leak fetch counts / max_pages / cooldown timestamps to the
@@ -557,9 +664,14 @@ async def readyz():
     }
 
 
-@app.post("/collect/bsr", dependencies=[Depends(verify_token)])
+@app.post(
+    "/collect/bsr",
+    dependencies=[Depends(verify_token)],
+    tags=["collect"],
+    summary="Scrape Amazon Best Sellers for a category node",
+)
 async def collect_bsr(req: BsrRequest):
-    """Scrape Amazon Best Sellers for a category node. Async with session reuse."""
+    """Synchronous (≤30s expected). Returns `{products, stats}` or `{error, products:[], stats:{}}`."""
     cleanup_stale_tasks()
     from parsers.bestsellers import parse_bestsellers, compute_bsr_stats
 
@@ -582,9 +694,14 @@ async def collect_bsr(req: BsrRequest):
         return {"error": str(e), "products": [], "stats": {}}
 
 
-@app.post("/collect/movers", dependencies=[Depends(verify_token)])
+@app.post(
+    "/collect/movers",
+    dependencies=[Depends(verify_token)],
+    tags=["collect"],
+    summary="Scrape Amazon Movers & Shakers for a category node",
+)
 async def collect_movers(req: MoversRequest):
-    """Scrape Amazon Movers & Shakers for a category node. Async with session reuse."""
+    """Synchronous. Returns `{movers}` or `{error, movers:[]}`."""
     cleanup_stale_tasks()
     from parsers.movers import parse_movers
 
@@ -604,18 +721,29 @@ async def collect_movers(req: MoversRequest):
         return {"error": str(e), "movers": []}
 
 
-@app.post("/collect/urls", dependencies=[Depends(verify_token)])
+@app.post(
+    "/collect/urls",
+    dependencies=[Depends(verify_token)],
+    tags=["collect"],
+    summary="Collect ASINs from N Best Sellers pages (async)",
+    status_code=202,
+)
 async def collect_urls(req: UrlsRequest, background_tasks: BackgroundTasks):
-    """Collect ASINs from Amazon Best Sellers pages. Returns task_id for polling."""
+    """Returns task_id for `/status/{task_id}` polling. `pages` capped at 20."""
     cleanup_stale_tasks()
     task_id = new_task(req.pages)
     background_tasks.add_task(process_url_collection, task_id, req.amazon_node_id, req.pages)
     return {"task_id": task_id}
 
 
-@app.post("/collect/trends", dependencies=[Depends(verify_token)])
+@app.post(
+    "/collect/trends",
+    dependencies=[Depends(verify_token)],
+    tags=["collect"],
+    summary="Google Trends signal per keyword",
+)
 async def collect_trends(req: TrendsRequest):
-    """Collect Google Trends data for keywords."""
+    """Synchronous. Up to 50 keywords. Returns `{trends}` or `{trends:[], error}`."""
     cleanup_stale_tasks()
     try:
         from parsers.trends import fetch_trends
@@ -629,9 +757,14 @@ async def collect_trends(req: TrendsRequest):
         return {"trends": [], "error": str(e)}
 
 
-@app.post("/collect/social", dependencies=[Depends(verify_token)])
+@app.post(
+    "/collect/social",
+    dependencies=[Depends(verify_token)],
+    tags=["collect"],
+    summary="Reddit signal per keyword (mentions, sentiment, top posts)",
+)
 async def collect_social(req: SocialRequest):
-    """Collect Reddit signals."""
+    """Returns `{reddit, tiktok_views}`. TikTok always `"n/a"` (PRAW only). Up to 50 each of keywords/subreddits."""
     cleanup_stale_tasks()
     try:
         from parsers.social import fetch_social
@@ -645,9 +778,15 @@ async def collect_social(req: SocialRequest):
         return {"reddit": {"mentions": 0, "sentiment": None, "top_posts": []}, "tiktok_views": "n/a", "error": str(e)}
 
 
-@app.post("/resync/price", dependencies=[Depends(verify_token)])
+@app.post(
+    "/resync/price",
+    dependencies=[Depends(verify_token)],
+    tags=["scraping"],
+    summary="Re-scrape product pages for updated prices (async)",
+    status_code=202,
+)
 async def resync_price(req: ResyncRequest, background_tasks: BackgroundTasks):
-    """Re-scrape product pages for updated prices. Returns task_id for polling."""
+    """Returns task_id for `/status/{task_id}` polling. Used by daily ShopifyPriceSyncJob."""
     cleanup_stale_tasks()
     task_id = new_task(len(req.asins))
     background_tasks.add_task(process_price_resync, task_id, req.asins)

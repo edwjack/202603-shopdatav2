@@ -124,18 +124,37 @@ module Api
         # Sanitize at every depth — string content must never be raw HTML
         # in storage, regardless of nesting level.
         sanitized = ActionController::Base.helpers.sanitize(obj).to_s
-        sanitized.length > MAX_STRING_LENGTH ? sanitized[0, MAX_STRING_LENGTH] : sanitized
+        if sanitized.length > MAX_STRING_LENGTH
+          # R-NEW-10 visibility: a legitimate large payload (rare, since
+          # Amazon titles ≤ 200 chars) being silently truncated needs to
+          # surface in logs so ops can spot it.
+          Rails.logger.warn(
+            "[batch_upsert] truncated string from #{sanitized.length} to #{MAX_STRING_LENGTH}"
+          )
+          sanitized[0, MAX_STRING_LENGTH]
+        else
+          sanitized
+        end
       when Numeric, TrueClass, FalseClass
         obj
       when Hash, ActionController::Parameters
-        return nil if depth > MAX_NESTED_DEPTH
+        if depth > MAX_NESTED_DEPTH
+          Rails.logger.warn("[batch_upsert] dropped Hash at depth=#{depth} (> MAX_NESTED_DEPTH=#{MAX_NESTED_DEPTH})")
+          return nil
+        end
         h = obj.is_a?(ActionController::Parameters) ? obj.to_unsafe_h : obj
         h.each_with_object({}) do |(k, v), acc|
           key = k.is_a?(String) ? recursive_sanitize(k, depth: depth + 1) : k
           acc[key] = recursive_sanitize(v, depth: depth + 1)
         end
       when Array
-        return nil if depth > MAX_NESTED_DEPTH
+        if depth > MAX_NESTED_DEPTH
+          Rails.logger.warn("[batch_upsert] dropped Array at depth=#{depth} (> MAX_NESTED_DEPTH=#{MAX_NESTED_DEPTH})")
+          return nil
+        end
+        if obj.length > MAX_ARRAY_LENGTH
+          Rails.logger.warn("[batch_upsert] truncated Array from #{obj.length} to #{MAX_ARRAY_LENGTH}")
+        end
         capped = obj.first(MAX_ARRAY_LENGTH)
         capped.map { |v| recursive_sanitize(v, depth: depth + 1) }
       else
