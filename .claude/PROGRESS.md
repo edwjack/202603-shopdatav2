@@ -89,8 +89,8 @@ GET  /config/proxy-status       POST /api/products/batch_upsert
 - [x] ~~**P0 — PR1 hot-fix**: rate_limiter.py:11 `from scraper.config` → `from config` (D1 boot 차단)~~ (657d0c9 2026-05-01)
 - [x] ~~**P0 — PR2 proxy+auth**: SessionManager 에 proxy/profile 전달 (C1/F1), control endpoint 토큰 인증 (C2/F9/Q1)~~ (81d0d7c+1a21df7 2026-05-01)
 - [x] ~~**P0 — PR3 durability**: checkpoint 단계적 status (scraped→persisted), retry status='failed' 마킹, fallback replay 도구 (F5/C3/F6/R15)~~ (8d1c6e0+1965f6e 2026-05-01)
-- [ ] **P1 — PR4 동시성**: Pydantic Field 제약, batch isolation (F4), flush lock 해제 (H2/F8), ban → redistribute (F3)
-- [ ] **P1 — PR5 Rails**: recursive_sanitize, batch_upsert 입력 검증 (H3/F10/Q5)
+- [x] ~~**P1 — PR4 동시성**: Pydantic Field 제약, batch isolation (F4), flush lock 해제 (H2/F8), ban → redistribute (F3)~~ (7934ea7 + 231c554 + ec87ddc + ac66916, 2026-05-01) — Pydantic Field 는 PR2 에서 처리, F8/H2 flush lock 은 PR3 에서 처리
+- [x] ~~**P1 — PR5 Rails**: recursive_sanitize, batch_upsert 입력 검증 (H3/F10/Q5)~~ (6537647 + 91d62aa, 2026-05-01)
 - [ ] **P1 — PR6 DX**: scraper/README.md, .env.example 에 M9 변수 18종, requirements.txt scrapling 핀 정확화 (D2-D4)
 - [ ] **P2 — PR7 monitoring**: /docs OpenAPI 메타 (tags/Field/docstring), /health Rails reachability, /metrics endpoint
 - [ ] Configure DECODO_PROXY_URL and SMARTPROXY_URL for multi-channel testing
@@ -200,6 +200,15 @@ test/jobs/sync_jobs_test.rb
 ---
 
 ## Session Notes
+
+### 2026-05-01 (PR4+PR5 — F2/F3/F4 + Rails sanitize)
+- 6 commit: 7934ea7 (PR4 F4+F2+F3), 231c554 (PR4 in-flight requeue), ec87ddc (PR4 position-track), ac66916 (PR4 F2 invariant), 6537647 (PR5 sanitize+JSON), 91d62aa (PR5 backcompat+depth)
+- F4 batch isolation (asyncio.Lock), F2 per-channel queues, F3 ban → drain + redistribute (in-flight 포함)
+- Rails recursive_sanitize: String 모든 깊이 sanitize, Hash/Array 깊이 4 한계, JSON 사전직렬화 backcompat, asin regex
+- Codex Gate cascade: PR4 4 round (high→medium→medium→low) → APPROVE, PR5 2 round (high→medium) → APPROVE
+- 회귀: scraper 7/7 pass. Rails test 는 Oracle ADB 인증서 (ORA-29024) 로 로컬 미실행, 16 케이스 정적 작성됨
+- 잔존: R-CARRY-13 (100-ASIN 24h soak) + ADB wallet 갱신 + DECODO/SMARTPROXY 환경 변수
+- docs/scraper-p1-fixes-2026-05-01.md 작성
 
 ### 2026-05-01 (JKI-98 P0 4건 즉시 fix)
 - 5 commit: 657d0c9 (D1 boot), 81d0d7c (PR2 proxy+auth+Pydantic), 1a21df7 (PR2 follow-up), 8d1c6e0 (PR3 durability), 1965f6e (PR3 follow-up)
