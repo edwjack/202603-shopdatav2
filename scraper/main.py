@@ -81,14 +81,25 @@ def verify_token(authorization: Optional[str] = Header(None)):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Legacy single session (for non-batch endpoints)
-    manager = SessionManager()
+    # v5 components first — the legacy session below needs proxy_rotator
+    app.state.proxy_rotator_obj = ProxyRotator()
+
+    # Legacy single session (for /collect/*, /resync/price, legacy /scrape).
+    # Pick the first enabled channel + a deterministic profile so the
+    # legacy path also routes through proxy + stealth profile, not DIRECT
+    # by default (gap from PR2 Gate).
+    channels = [n for n, c in app.state.proxy_rotator_obj.channels.items() if c.enabled]
+    legacy_channel = channels[0] if channels else "direct"
+    legacy_proxy = app.state.proxy_rotator_obj.get_proxy(legacy_channel)
+    from worker_pool import WORKER_PROFILES
+    legacy_profile = WORKER_PROFILES[0]
+    manager = SessionManager(proxy=legacy_proxy, profile=legacy_profile)
     if not MOCK_MODE:
         await manager.start()
     app.state.session = manager
 
     # v5 components
-    app.state.proxy_rotator = ProxyRotator()
+    app.state.proxy_rotator = app.state.proxy_rotator_obj
     app.state.rate_limiter = AdaptiveRateLimiter()
     app.state.checkpoint = CheckpointManager()
     app.state.result_buffer = BatchResultBuffer()
@@ -525,13 +536,20 @@ async def get_task_status(task_id: str):
 
 @app.get("/health")
 async def health():
-    """Health check endpoint. Always responds quickly (<100ms)."""
-    session_stats = app.state.session.stats if hasattr(app.state, "session") else {}
+    """Liveness only. No session/proxy/config detail (public endpoint)."""
+    return {"status": "ok"}
+
+
+@app.get("/readyz", dependencies=[Depends(verify_token)])
+async def readyz():
+    """Readiness — includes browser session + worker pool stats. Auth-only
+    so we don't leak fetch counts / max_pages / cooldown timestamps to the
+    public (gap from PR2 Gate)."""
     return {
         "status": "ok",
         "service": "amazon-scraper",
-        "version": "4.0.0",
-        "browser_session": session_stats,
+        "version": "5.0.0",
+        "browser_session": app.state.session.stats if hasattr(app.state, "session") else {},
     }
 
 
