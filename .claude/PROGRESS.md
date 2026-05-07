@@ -2,7 +2,7 @@
 
 **Project**: 202603-shopdatav2
 **Created**: 2026-02-21
-**Last Updated**: 2026-05-01
+**Last Updated**: 2026-05-07
 
 ---
 
@@ -200,6 +200,12 @@ test/jobs/sync_jobs_test.rb
 ---
 
 ## Session Notes
+
+### 2026-05-07 (docs — 100-ASIN 24h soak 리포트 갱신)
+- `docs/soak/100-asin-24h-2026-05-01.md` 갱신: PENDING placeholder → COMPLETED 리포트 (`run-id 20260501T054602Z`)
+- `scripts/soak_summarize.py`가 자동 생성한 최종 결과물로 교체 (header, latency table, per-ASIN distribution, block analysis 포함)
+- DIRECT-only 모드 (DECODO/SMARTPROXY 미설정), Mode: real
+- 다음 단계: JKI-86 (3-channel benchmark — DECODO/SMARTPROXY 설정 후 재실행)
 
 ### 2026-05-01 (R-CARRY-13 — 100-ASIN 24h soak 백그라운드 시작)
 - **결과 문서 위치**: `docs/soak/100-asin-24h-2026-05-01.md` (placeholder 먼저, summarizer 가 24h 동안 매 fetch마다 갱신)
